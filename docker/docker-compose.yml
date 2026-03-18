@@ -13,32 +13,17 @@ services:
     environment:
       - QDRANT_URL=http://qdrant:6333
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ai_research
-      - GROBID_URL=http://grobid:8070
     depends_on:
       - qdrant
       - postgres
-      - grobid
-    restart: unless-stopped
-
-  grobid:
-    image: grobid/grobid:0.8.2-crf
-    container_name: grobid
-    ports:
-      - "8070:8070"  # service
-      - "8071:8071"  # health
-    ulimits:
-      core: 0
-    # Light profile for weak machines (adjust if needed)
-    mem_limit: 3g
-    cpus: 1.0
     restart: unless-stopped
 
   qdrant:
     image: qdrant/qdrant:latest
     container_name: qdrant
     ports:
-      - "6333:6333"  
-      - "6334:6334"  
+      - "6333:6333"
+      - "6334:6334"
     volumes:
       - qdrant_storage:/qdrant/storage
     restart: unless-stopped
