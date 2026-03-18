@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+pydantic
+httpx
+loguru
+numpy
+scikit-learn
+sentence-transformers
+faiss-cpu
+PyMuPDF
+ragas
+qdrant-client
+psycopg[binary]
