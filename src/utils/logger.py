@@ -1,6 +1,5 @@
 from loguru import logger
 
-
 def setup_logger(level: str = "INFO") -> None:
     logger.remove()
     logger.add(
@@ -9,6 +8,5 @@ def setup_logger(level: str = "INFO") -> None:
         backtrace=True,
         diagnose=True,
     )
-
 
 __all__ = ["logger", "setup_logger"]

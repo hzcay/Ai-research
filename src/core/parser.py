@@ -194,7 +194,7 @@ def _extract_authors_from_markdown(markdown: str, title: str) -> List[str]:
             break
         if ln.startswith("http") or ln.startswith("Figure") or ln.startswith("!["):
             continue
-        if _has_any_quote(ln) or _ARXIV_LINE_RE.search(ln):
+        if _ARXIV_LINE_RE.search(ln):
             continue
         if len(ln) < 5 or len(ln) > 300:
             continue
@@ -203,17 +203,42 @@ def _extract_authors_from_markdown(markdown: str, title: str) -> List[str]:
     if not candidates:
         return []
 
-    # join all candidate lines then split by comma-like separators
+    # Keep original continuity first; do not destroy tokens like "Hunyuan3D"
     raw = " ".join(candidates)
-    # remove affiliation markers like superscripts/numbers/stars
-    raw = re.sub(r"\s*[,\s]*\d+\s*[,\s]*", " ", raw)
-    raw = re.sub(r"[*†‡§∗]", "", raw)
-    raw = re.sub(r"\s{2,}", " ", raw).strip()
+    raw = re.sub(r"[*†‡§∗]", " ", raw)  # footnote markers
+    # remove standalone affiliation indices only (1, 2, 1,2), keep digits inside words
+    raw = re.sub(r"(?<![A-Za-z])\d+(?:\s*,\s*\d+)*(?![A-Za-z])", " ", raw)
+    raw = re.sub(r"\s{2,}", " ", raw).strip(" -,:;")
 
-    # split on common author separators
-    parts = re.split(r"\s{2,}|(?<=\w)\s*,\s*(?=[A-Z])", raw)
-    authors = [p.strip().rstrip(",") for p in parts if len(p.strip()) >= 3]
-    return authors if authors else []
+    # 1) Team-style author (e.g., Hunyuan3D Team) -> keep as one item
+    team_hits = re.findall(r"\b[A-Za-z][A-Za-z0-9\-]*\s+Team\b", raw)
+    if team_hits:
+        # unique preserve order
+        out_team: List[str] = []
+        seen_team = set()
+        for t in team_hits:
+            t = t.strip()
+            if t and t not in seen_team:
+                seen_team.add(t)
+                out_team.append(t)
+        if out_team:
+            return out_team
+
+    # 2) Person-name extraction (safe pattern)
+    name_re = re.compile(r"\b[A-Z][a-zA-Z'’\-]+(?:\s+[A-Z]\.)?\s+[A-Z][a-zA-Z'’\-]+\b")
+    names = name_re.findall(raw)
+    if names:
+        out: List[str] = []
+        seen = set()
+        for n in names:
+            n = n.strip()
+            if n and n not in seen:
+                seen.add(n)
+                out.append(n)
+        if out:
+            return out
+
+    return [raw] if raw else []
 
 
 _converter: DocumentConverter | None = None
