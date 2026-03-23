@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
@@ -21,7 +21,7 @@ class SearchRequest(BaseModel):
 class SearchResult(BaseModel):
     id: Optional[str] = None
     score: Optional[float] = None
-    metadata: Dict[str, Any] = {}
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class SearchResponse(BaseModel):

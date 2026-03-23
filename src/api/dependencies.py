@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from src.config import get_settings
+from src.infrastructure.config.settings import get_settings
 from src.utils.logger import setup_logger
 
 

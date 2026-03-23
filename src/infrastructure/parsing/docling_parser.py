@@ -2,23 +2,27 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import fitz
 from docling.document_converter import DocumentConverter
+from src.infrastructure.parsing.parsed_writer import save_parsed
 
 MAX_SANE_TITLE_LEN = 200
 MIN_SANE_ABSTRACT_LEN = 80
 _QUOTE_CHARS = set('""\u2018\u2019\u201C\u201D\u00AB\u00BB\u2039\u203A')
 _ARXIV_LINE_RE = re.compile(r"arXiv:\d|^\[?\w{2,4}\.\w{2,4}\]?$|\bdoi\b", re.IGNORECASE)
 
+
 def _collapse_ws(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
+
 
 def _has_any_quote(text: str) -> bool:
     return any(ch in _QUOTE_CHARS for ch in text) or bool(
         re.search(r'[\u0022\u0027\u2018-\u201F\u00AB\u00BB]', text)
     )
+
 
 def _title_looks_bad(title: str) -> bool:
     if not title or len(title) > MAX_SANE_TITLE_LEN:
@@ -157,12 +161,7 @@ def _extract_abstract(text: str) -> str:
     return ""
 
 
-# ---------------------------------------------------------------------------
-# Markdown-based metadata extraction (from Docling output)
-# ---------------------------------------------------------------------------
-
 def _extract_title_from_markdown(markdown: str) -> str:
-    """First ## heading in the markdown is typically the paper title."""
     m = re.search(r"^##\s+(.+)$", markdown, re.MULTILINE)
     if m:
         title = m.group(1).strip()
@@ -172,10 +171,8 @@ def _extract_title_from_markdown(markdown: str) -> str:
 
 
 def _extract_authors_from_markdown(markdown: str, title: str) -> List[str]:
-    """Lines between the title heading and the next heading/section break."""
     if not title:
         return []
-
     escaped = re.escape(title)
     m = re.search(
         rf"^##\s+{escaped}\s*\n+(.*?)(?=\n##\s|\n<!-- |\Z)",
@@ -187,7 +184,6 @@ def _extract_authors_from_markdown(markdown: str, title: str) -> List[str]:
 
     block = m.group(1).strip()
     lines = [ln.strip() for ln in block.split("\n") if ln.strip()]
-
     candidates: List[str] = []
     for ln in lines[:5]:
         if re.search(r"\b(abstract|introduction|keywords)\b", ln, re.IGNORECASE):
@@ -199,21 +195,16 @@ def _extract_authors_from_markdown(markdown: str, title: str) -> List[str]:
         if len(ln) < 5 or len(ln) > 300:
             continue
         candidates.append(ln)
-
     if not candidates:
         return []
 
-    # Keep original continuity first; do not destroy tokens like "Hunyuan3D"
     raw = " ".join(candidates)
-    raw = re.sub(r"[*†‡§∗]", " ", raw)  # footnote markers
-    # remove standalone affiliation indices only (1, 2, 1,2), keep digits inside words
+    raw = re.sub(r"[*†‡§∗]", " ", raw)
     raw = re.sub(r"(?<![A-Za-z])\d+(?:\s*,\s*\d+)*(?![A-Za-z])", " ", raw)
     raw = re.sub(r"\s{2,}", " ", raw).strip(" -,:;")
 
-    # 1) Team-style author (e.g., Hunyuan3D Team) -> keep as one item
     team_hits = re.findall(r"\b[A-Za-z][A-Za-z0-9\-]*\s+Team\b", raw)
     if team_hits:
-        # unique preserve order
         out_team: List[str] = []
         seen_team = set()
         for t in team_hits:
@@ -224,7 +215,6 @@ def _extract_authors_from_markdown(markdown: str, title: str) -> List[str]:
         if out_team:
             return out_team
 
-    # 2) Person-name extraction (safe pattern)
     name_re = re.compile(r"\b[A-Z][a-zA-Z'’\-]+(?:\s+[A-Z]\.)?\s+[A-Z][a-zA-Z'’\-]+\b")
     names = name_re.findall(raw)
     if names:
@@ -237,7 +227,6 @@ def _extract_authors_from_markdown(markdown: str, title: str) -> List[str]:
                 out.append(n)
         if out:
             return out
-
     return [raw] if raw else []
 
 
@@ -257,19 +246,8 @@ def _parse_with_docling(pdf_path: Path) -> Dict[str, Any]:
     doc = result.document
     markdown = doc.export_to_markdown()
 
-    # title: markdown first, then PyMuPDF fallback
-    title = _extract_title_from_markdown(markdown)
-    if not title:
-        title = _extract_title_pymupdf(pdf_path)
-    if not title:
-        title = doc.name or pdf_path.stem
-
-    # authors: markdown first, then PyMuPDF fallback
-    authors = _extract_authors_from_markdown(markdown, title)
-    if not authors:
-        authors = _extract_authors_pymupdf(pdf_path, title)
-    if not authors:
-        authors = ["Unknown"]
+    title = _extract_title_from_markdown(markdown) or _extract_title_pymupdf(pdf_path) or doc.name or pdf_path.stem
+    authors = _extract_authors_from_markdown(markdown, title) or _extract_authors_pymupdf(pdf_path, title) or ["Unknown"]
 
     abstract = _extract_abstract(markdown)
     if not abstract:
@@ -279,7 +257,6 @@ def _parse_with_docling(pdf_path: Path) -> Dict[str, Any]:
                 raw += fdoc.load_page(i).get_text("text") + "\n"
             abstract = _extract_abstract(raw)
 
-    total_pages = 0
     with fitz.open(pdf_path) as fdoc:
         total_pages = fdoc.page_count
 
@@ -299,18 +276,9 @@ def _parse_with_docling(pdf_path: Path) -> Dict[str, Any]:
 
 def _parse_with_pymupdf(pdf_path: Path) -> Dict[str, Any]:
     with fitz.open(pdf_path) as doc:
-        title = _extract_title_pymupdf(pdf_path)
-        if not title:
-            title = (doc.metadata or {}).get("title", "") or pdf_path.stem
-
-        authors = _extract_authors_pymupdf(pdf_path, title)
-        if not authors:
-            authors = ["Unknown"]
-
-        pages_text: List[str] = []
-        for idx in range(doc.page_count):
-            pages_text.append(doc.load_page(idx).get_text("text").strip())
-
+        title = _extract_title_pymupdf(pdf_path) or (doc.metadata or {}).get("title", "") or pdf_path.stem
+        authors = _extract_authors_pymupdf(pdf_path, title) or ["Unknown"]
+        pages_text = [doc.load_page(idx).get_text("text").strip() for idx in range(doc.page_count)]
         full_text = "\n\n".join(pages_text)
         abstract = _extract_abstract(full_text)
 
@@ -327,51 +295,6 @@ def _parse_with_pymupdf(pdf_path: Path) -> Dict[str, Any]:
         "content": full_text,
     }
 
-def _build_frontmatter(result: Dict[str, Any]) -> str:
-    meta = result.get("metadata", {})
-    title_safe = meta.get("title", "").replace('"', '\\"')
-    authors = meta.get("authors", []) or []
-    authors_yaml = "[" + ", ".join(f"\"{a.replace('\"', '\\\\\"')}\"" for a in authors) + "]"
-    abstract_safe = meta.get("abstract", "")[:300].replace('"', '\\"')
-
-    return (
-        "---\n"
-        f'title: "{title_safe}"\n'
-        f"authors: {authors_yaml}\n"
-        f"source: {result.get('source', 'unknown')}\n"
-        f"total_pages: {result.get('total_pages', 0)}\n"
-        f"has_tables: {str(meta.get('has_tables', False)).lower()}\n"
-        f'abstract: "{abstract_safe}"\n'
-        "---\n\n"
-    )
-
-
-def save_parsed(result: Dict[str, Any], data_dir: Path, pdf_path: Path) -> Tuple[Path, Path]:
-    stem = Path(result.get("filename", "unknown")).stem
-
-    raw_dir = data_dir / "raw_texts"
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    raw_path = raw_dir / f"{stem}.md"
-
-    pages: List[str] = []
-    with fitz.open(pdf_path) as doc:
-        for idx in range(doc.page_count):
-            text = doc.load_page(idx).get_text("text").strip()
-            pages.append(f"<!-- page {idx + 1} -->\n\n{text}")
-
-    with raw_path.open("w", encoding="utf-8") as f:
-        f.write(f"<!-- raw text: {result.get('filename')} -->\n\n")
-        f.write("\n\n---\n\n".join(pages))
-
-    proc_dir = data_dir / "processed"
-    proc_dir.mkdir(parents=True, exist_ok=True)
-    proc_path = proc_dir / f"{stem}.md"
-
-    with proc_path.open("w", encoding="utf-8") as f:
-        f.write(_build_frontmatter(result))
-        f.write(result.get("content", ""))
-
-    return raw_path, proc_path
 
 def parse_research_paper(path: str | Path) -> Dict[str, Any]:
     pdf_path = Path(path)
@@ -381,32 +304,17 @@ def parse_research_paper(path: str | Path) -> Dict[str, Any]:
         print(f"Docling failed: {e}. Falling back to PyMuPDF.")
         return _parse_with_pymupdf(pdf_path)
 
-if __name__ == "__main__":
-    here = Path(__file__).resolve()
-    repo_root = next((p for p in [here.parent, *here.parents] if (p / "data").exists()), here.parent)
-    data_dir = repo_root / "data"
 
-    pdfs = list((data_dir / "raw_pdfs").glob("*.pdf"))
-    if not pdfs:
-        print("No PDFs found in data/raw_pdfs/")
+def parse_pdf_batch(pdf_paths: List[Path], data_dir: Path | None = None) -> List[Dict[str, Any]]:
+    outputs: List[Dict[str, Any]] = []
+    if data_dir is None:
+        here = Path(__file__).resolve()
+        data_dir = next((p / "data" for p in [here.parent, *here.parents] if (p / "data").exists()), Path("data"))
 
-    for pdf in pdfs:
-        print(f"\n{'='*60}")
-        print(f"File: {pdf.name}")
-        data = parse_research_paper(pdf)
-        meta = data.get("metadata", {})
-        content = data.get("content", "")
-
-        print(f"Source    : {data.get('source')}")
-        print(f"Pages     : {data.get('total_pages')}")
-        print(f"Title     : {meta.get('title', '')[:120]}")
-        print(f"Authors   : {meta.get('authors', [])}")
-        abstract = meta.get("abstract", "")
-        print(f"Abstract  : ({len(abstract)} chars) {abstract[:200]}{'...' if len(abstract) > 200 else ''}")
-        print(f"Has Tables: {meta.get('has_tables')}")
-        print(f"Content   : {len(content)} chars")
-        print(f"Preview   :\n{content[:500]}")
-
-        raw_out, proc_out = save_parsed(data, data_dir, pdf)
-        print(f"  -> Raw : {raw_out}")
-        print(f"  -> Proc: {proc_out}")
+    for pdf in pdf_paths:
+        result = parse_research_paper(pdf)
+        raw_path, proc_path = save_parsed(result, data_dir, pdf)
+        result["raw_path"] = str(raw_path)
+        result["processed_path"] = str(proc_path)
+        outputs.append(result)
+    return outputs
