@@ -30,8 +30,10 @@ def get_generate_answer_use_case() -> GenerateAnswerUseCase:
     llm = GroqChatModel(
         api_key=settings.groq_api_key or "",
         model_name=settings.groq_model,
+        model_name_2=settings.groq_model_2,
     )
-    return GenerateAnswerUseCase(llm=llm)
+    retrieve = get_retrieve_context_use_case()
+    return GenerateAnswerUseCase(llm=llm, retrieve=retrieve)
 
 
 @lru_cache()

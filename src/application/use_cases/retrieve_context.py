@@ -12,6 +12,6 @@ class RetrieveContextUseCase:
         self._embedder = embedder
         self._vector_store = vector_store
 
-    def execute(self, query: str, top_k: int = 5) -> List[RetrievedChunk]:
+    def execute(self, query: str, top_k: int = 2) -> List[RetrievedChunk]:
         query_vector = self._embedder.encode_query(query)
         return self._vector_store.search(query_vector=query_vector, top_k=top_k)

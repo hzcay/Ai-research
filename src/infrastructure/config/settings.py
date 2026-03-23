@@ -12,7 +12,8 @@ class Settings(BaseSettings):
 
     groq_api_key: str | None = None
     groq_model: str = "meta-llama/llama-4-scout-17b-16e-instruct"
-
+    groq_model_2: str = "meta-llama/llama-3.1-8b-instant"
+    
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(
