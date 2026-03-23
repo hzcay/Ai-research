@@ -12,3 +12,5 @@ PyMuPDF
 ragas
 qdrant-client
 docling
+google-genai
+groq

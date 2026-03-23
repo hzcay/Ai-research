@@ -3,5 +3,6 @@
 .env.example
 .venv/
 data/
+docker/ollama_data/
 *.log
 __pycache__/

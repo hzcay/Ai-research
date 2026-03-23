@@ -40,7 +40,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
-
+    
 volumes:
   qdrant_storage:
   postgres_data:
