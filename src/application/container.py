@@ -20,8 +20,20 @@ def get_retrieve_context_use_case() -> RetrieveContextUseCase:
     vector_store = QdrantVectorStore(
         qdrant_url=settings.qdrant_url,
         collection_name=settings.qdrant_collection,
+        timeout_s=settings.qdrant_timeout_s,
+        retries=settings.qdrant_retries,
+        lexical_candidate_limit=settings.lexical_candidate_limit,
     )
-    return RetrieveContextUseCase(embedder=embedder, vector_store=vector_store)
+    return RetrieveContextUseCase(
+        embedder=embedder,
+        vector_store=vector_store,
+        hybrid_enabled=settings.hybrid_enabled,
+        alpha=settings.hybrid_alpha,
+        beta=settings.hybrid_beta,
+        rerank_enabled=settings.rerank_enabled,
+        rerank_top_n=settings.rerank_top_n,
+        rerank_final_k=settings.rerank_final_k,
+    )
 
 
 @lru_cache()
@@ -31,6 +43,8 @@ def get_generate_answer_use_case() -> GenerateAnswerUseCase:
         api_key=settings.groq_api_key or "",
         model_name=settings.groq_model,
         model_name_2=settings.groq_model_2,
+        timeout_s=settings.groq_timeout_s,
+        retries=settings.groq_retries,
     )
     retrieve = get_retrieve_context_use_case()
     return GenerateAnswerUseCase(llm=llm, retrieve=retrieve)

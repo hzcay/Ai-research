@@ -12,8 +12,22 @@ class Settings(BaseSettings):
 
     groq_api_key: str | None = None
     groq_model: str = "meta-llama/llama-4-scout-17b-16e-instruct"
-    groq_model_2: str = "meta-llama/llama-3.1-8b-instant"
-    
+    groq_model_2: str = "llama-3.1-8b-instant"
+    groq_timeout_s: float = 30.0
+    groq_retries: int = 2
+
+    qdrant_timeout_s: float = 10.0
+    qdrant_retries: int = 2
+
+    hybrid_enabled: bool = True
+    hybrid_alpha: float = 0.7
+    hybrid_beta: float = 0.3
+    lexical_candidate_limit: int = 1000
+
+    rerank_enabled: bool = True
+    rerank_top_n: int = 20
+    rerank_final_k: int = 5
+
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(

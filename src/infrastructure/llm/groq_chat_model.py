@@ -1,15 +1,26 @@
 from __future__ import annotations
 
+import math
+import time
 from groq import Groq
 
 from src.application.ports.llm_port import LlmPort
 
 
 class GroqChatModel(LlmPort):
-    def __init__(self, api_key: str, model_name: str, model_name_2: str) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str,
+        model_name_2: str,
+        timeout_s: float = 30.0,
+        retries: int = 2,
+    ) -> None:
         self._client = Groq(api_key=api_key)
         self._model_name = model_name
         self._model_name_2 = model_name_2
+        self._timeout_s = timeout_s
+        self._retries = max(0, retries)
 
     def generate(self, user_prompt: str, system_instruction: str | None = None) -> str:
         messages = []
@@ -17,10 +28,7 @@ class GroqChatModel(LlmPort):
             messages.append({"role": "system", "content": system_instruction})
         messages.append({"role": "user", "content": user_prompt})
 
-        response = self._client.chat.completions.create(
-            model=self._model_name,
-            messages=messages,
-        )
+        response = self._chat_with_retry(model=self._model_name, messages=messages)
         return response.choices[0].message.content or ""
 
     def multi_query_rewrite(self, original_query: str | None = None) -> list[str]:
@@ -41,12 +49,26 @@ class GroqChatModel(LlmPort):
         - No numbering, no introductory text, no bullet points.
         - Maintain the language of the original query unless it's a technical term."""
         
-        response = self._client.chat.completions.create(
+        response = self._chat_with_retry(
             model=self._model_name_2,
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
         )
 
         raw = (response.choices[0].message.content or "").strip()
         queries = raw.split("\n")
         cleaned = [q.strip() for q in queries if q.strip()][:3]
         return cleaned or [original_query.strip()]
+
+    def _chat_with_retry(self, *, model: str, messages: list[dict]) -> any:
+        for attempt in range(self._retries + 1):
+            try:
+                return self._client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    timeout=self._timeout_s,
+                )
+            except Exception:
+                if attempt >= self._retries:
+                    raise
+                time.sleep(0.2 * math.pow(2, attempt))
+        raise RuntimeError("Unreachable retry state")
