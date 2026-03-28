@@ -1,8 +1,8 @@
 # .gitignore
 .env
-.env.example
 .venv/
 data/
+.pytest_cache/
 docker/ollama_data/
 *.log
 __pycache__/

@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from groq import Groq
 from qdrant_client import QdrantClient
@@ -6,12 +8,18 @@ from src.api.dependencies import init_app_dependencies
 from src.api.routes import chat, ingest, search
 from src.infrastructure.config.settings import get_settings
 
-app = FastAPI(title="Research Assistant RAG", version="0.1.0")
 
-
-@app.on_event("startup")
-async def startup_event() -> None:
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
     init_app_dependencies()
+    yield
+
+
+app = FastAPI(
+    title="Research Assistant RAG",
+    version="0.1.0",
+    lifespan=lifespan,
+)
 
 
 @app.get("/health")
