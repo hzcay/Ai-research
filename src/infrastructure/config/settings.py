@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     qdrant_timeout_s: float = 10.0
     qdrant_retries: int = 2
 
+    upload_dir: str = "data/uploads"
+
     hybrid_enabled: bool = True
     hybrid_alpha: float = 0.7
     hybrid_beta: float = 0.3

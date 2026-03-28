@@ -44,9 +44,12 @@ class QdrantIndexer:
 
         for i, doc in enumerate(docs, start=1):
             filename = str(doc.get("filename", f"doc_{i}"))
-            doc_id = build_doc_id(filename)
+            doc_id = str(doc.get("doc_id") or build_doc_id(filename))
             content = str(doc.get("content", ""))
             meta = dict(doc.get("metadata", {}))
+            content_hash = doc.get("content_hash")
+            if content_hash:
+                meta["content_hash"] = content_hash
 
             content_chunks, table_chunks = chunk_markdown_with_tables(
                 content,
@@ -58,10 +61,14 @@ class QdrantIndexer:
                 c["doc_id"] = doc_id
                 c["filename"] = filename
                 c["metadata"] = meta
+                if content_hash:
+                    c["content_hash"] = content_hash
             for t in table_chunks:
                 t["doc_id"] = doc_id
                 t["filename"] = filename
                 t["metadata"] = meta
+                if content_hash:
+                    t["content_hash"] = content_hash
 
             report = test_chunk_sizes(content_chunks, min_tokens=min_tokens, max_tokens=max_tokens)
             report["doc_id"] = doc_id
@@ -98,6 +105,7 @@ class QdrantIndexer:
             payload = {
                 "external_id": external_id,
                 "doc_id": c.get("doc_id"),
+                "content_hash": c.get("content_hash"),
                 "filename": c.get("filename"),
                 "chunk_type": c.get("chunk_type"),
                 "token_estimate": c.get("token_estimate"),
@@ -139,3 +147,31 @@ class QdrantIndexer:
             convert_to_numpy=True,
         )
         return [v.tolist() for v in vecs]
+
+    def find_doc_id_by_content_hash(self, content_hash: str) -> str | None:
+        if not content_hash:
+            return None
+        ok, _ = self._is_qdrant_available()
+        if not ok:
+            return None
+        flt = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="content_hash",
+                    match=models.MatchValue(value=content_hash),
+                )
+            ]
+        )
+        points, _ = self._client.scroll(
+            collection_name=self._collection_name,
+            scroll_filter=flt,
+            limit=1,
+            with_payload=True,
+            with_vectors=False,
+        )
+        if not points:
+            return None
+        p0 = points[0]
+        payload = getattr(p0, "payload", None) or {}
+        doc_id = payload.get("doc_id")
+        return str(doc_id) if doc_id else None

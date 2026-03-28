@@ -14,6 +14,11 @@ from src.infrastructure.vectorstores.qdrant_store import QdrantVectorStore
 
 
 @lru_cache()
+def get_document_indexer() -> DocumentIndexer:
+    return DocumentIndexer(settings=get_settings())
+
+
+@lru_cache()
 def get_retrieve_context_use_case() -> RetrieveContextUseCase:
     settings = get_settings()
     embedder = BgeEmbedder(model_name=settings.embed_model_name)
@@ -52,7 +57,5 @@ def get_generate_answer_use_case() -> GenerateAnswerUseCase:
 
 @lru_cache()
 def get_ingest_pdfs_use_case() -> IngestPdfsUseCase:
-    settings = get_settings()
     parser = PdfParser()
-    indexer = DocumentIndexer(settings=settings)
-    return IngestPdfsUseCase(parser=parser, indexer=indexer)
+    return IngestPdfsUseCase(parser=parser, indexer=get_document_indexer())

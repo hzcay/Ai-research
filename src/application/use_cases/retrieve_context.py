@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import re
 import time
-from typing import List
+from typing import List, Optional
 
 from src.application.ports.embedder_port import EmbedderPort
 from src.application.ports.vector_store_port import VectorStorePort
@@ -33,18 +33,32 @@ class RetrieveContextUseCase:
         self._rerank_top_n = rerank_top_n
         self._rerank_final_k = rerank_final_k
 
-    def execute(self, query: str, top_k: int = 5) -> List[RetrievedChunk]:
+    def execute(
+        self,
+        query: str,
+        top_k: int = 5,
+        document_id: Optional[str] = None,
+    ) -> List[RetrievedChunk]:
         t0 = time.perf_counter()
         query_vector = self._embedder.encode_query(query)
-        semantic = self._vector_store.search(query_vector=query_vector, top_k=max(top_k, self._rerank_top_n))
+        cap = max(top_k, self._rerank_top_n)
+        semantic = self._vector_store.search(
+            query_vector=query_vector,
+            top_k=cap,
+            document_id=document_id,
+        )
         if not self._hybrid_enabled:
             out = semantic[:top_k]
             logger.bind(stage="retrieve", strategy="semantic_only").info(
-                f"query='{query}' results={len(out)} latency_ms={_ms(t0)}"
+                f"query='{query}' doc={document_id!r} results={len(out)} latency_ms={_ms(t0)}"
             )
             return out
 
-        lexical = self._vector_store.keyword_search(query_text=query, top_k=max(top_k, self._rerank_top_n))
+        lexical = self._vector_store.keyword_search(
+            query_text=query,
+            top_k=cap,
+            document_id=document_id,
+        )
         fused = _rrf_fuse(semantic, lexical)
         boosted = _hybrid_boost(fused, query=query, alpha=self._alpha, beta=self._beta)
 
@@ -52,7 +66,8 @@ class RetrieveContextUseCase:
             boosted = _keyword_rerank(boosted[: self._rerank_top_n], query=query, final_k=min(top_k, self._rerank_final_k))
         out = boosted[:top_k]
         logger.bind(stage="retrieve", strategy="hybrid").info(
-            f"query='{query}' semantic={len(semantic)} lexical={len(lexical)} results={len(out)} latency_ms={_ms(t0)}"
+            f"query='{query}' doc={document_id!r} semantic={len(semantic)} lexical={len(lexical)} "
+            f"results={len(out)} latency_ms={_ms(t0)}"
         )
         return out
 

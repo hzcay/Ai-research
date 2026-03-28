@@ -15,4 +15,5 @@ qdrant-client
 docling
 google-genai
 groq
-sentence-transformers
+streamlit
+python-multipart

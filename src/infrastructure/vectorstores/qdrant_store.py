@@ -3,12 +3,26 @@ from __future__ import annotations
 import math
 import re
 import time
-from typing import Any, List
+from typing import Any, List, Optional
 
 import qdrant_client
+from qdrant_client import models
 
 from src.application.ports.vector_store_port import VectorStorePort
 from src.domain.entities.retrieval import RetrievedChunk
+
+
+def _doc_id_filter(document_id: Optional[str]) -> Optional[models.Filter]:
+    if not document_id:
+        return None
+    return models.Filter(
+        must=[
+            models.FieldCondition(
+                key="doc_id",
+                match=models.MatchValue(value=document_id),
+            )
+        ]
+    )
 
 
 class QdrantVectorStore(VectorStorePort):
@@ -25,8 +39,13 @@ class QdrantVectorStore(VectorStorePort):
         self._retries = max(0, retries)
         self._lexical_candidate_limit = max(10, lexical_candidate_limit)
 
-    def search(self, query_vector: List[float], top_k: int) -> List[RetrievedChunk]:
-        hits = self._query(query_vector=query_vector, top_k=top_k)
+    def search(
+        self,
+        query_vector: List[float],
+        top_k: int,
+        document_id: Optional[str] = None,
+    ) -> List[RetrievedChunk]:
+        hits = self._query(query_vector=query_vector, top_k=top_k, document_id=document_id)
         output: List[RetrievedChunk] = []
         for hit in hits:
             payload = getattr(hit, "payload", None) or {}
@@ -42,25 +61,37 @@ class QdrantVectorStore(VectorStorePort):
             )
         return output
 
-    def _query(self, query_vector: List[float], top_k: int) -> List[Any]:
+    def _query(
+        self,
+        query_vector: List[float],
+        top_k: int,
+        document_id: Optional[str] = None,
+    ) -> List[Any]:
+        qf = _doc_id_filter(document_id)
         for attempt in range(self._retries + 1):
             try:
                 if hasattr(self._client, "query_points"):
-                    response = self._client.query_points(
-                        collection_name=self._collection_name,
-                        query=query_vector,
-                        limit=top_k,
-                        with_payload=True,
-                    )
+                    qp: dict[str, Any] = {
+                        "collection_name": self._collection_name,
+                        "query": query_vector,
+                        "limit": top_k,
+                        "with_payload": True,
+                    }
+                    if qf is not None:
+                        qp["query_filter"] = qf
+                    response = self._client.query_points(**qp)
                     return list(response.points)
 
                 if hasattr(self._client, "search"):
-                    return self._client.search(
-                        collection_name=self._collection_name,
-                        query_vector=query_vector,
-                        limit=top_k,
-                        with_payload=True,
-                    )
+                    sp: dict[str, Any] = {
+                        "collection_name": self._collection_name,
+                        "query_vector": query_vector,
+                        "limit": top_k,
+                        "with_payload": True,
+                    }
+                    if qf is not None:
+                        sp["query_filter"] = qf
+                    return self._client.search(**sp)
 
                 raise AttributeError("Qdrant client has no supported search method.")
             except Exception:
@@ -69,12 +100,20 @@ class QdrantVectorStore(VectorStorePort):
                 time.sleep(0.2 * math.pow(2, attempt))
         return []
 
-    def keyword_search(self, query_text: str, top_k: int) -> List[RetrievedChunk]:
+    def keyword_search(
+        self,
+        query_text: str,
+        top_k: int,
+        document_id: Optional[str] = None,
+    ) -> List[RetrievedChunk]:
         terms = _tokenize(query_text)
         if not terms:
             return []
 
-        points = self._scroll_payloads(limit=self._lexical_candidate_limit)
+        points = self._scroll_payloads(
+            limit=self._lexical_candidate_limit,
+            document_id=document_id,
+        )
         scored: List[tuple[float, Any]] = []
         for p in points:
             payload = getattr(p, "payload", None) or {}
@@ -101,21 +140,25 @@ class QdrantVectorStore(VectorStorePort):
             )
         return output
 
-    def _scroll_payloads(self, limit: int) -> List[Any]:
+    def _scroll_payloads(self, limit: int, document_id: Optional[str] = None) -> List[Any]:
         all_points: List[Any] = []
         offset = None
         remaining = limit
+        sf = _doc_id_filter(document_id)
         while remaining > 0:
             batch_size = min(128, remaining)
             for attempt in range(self._retries + 1):
                 try:
-                    points, next_offset = self._client.scroll(
-                        collection_name=self._collection_name,
-                        limit=batch_size,
-                        with_payload=True,
-                        with_vectors=False,
-                        offset=offset,
-                    )
+                    sk: dict[str, Any] = {
+                        "collection_name": self._collection_name,
+                        "limit": batch_size,
+                        "with_payload": True,
+                        "with_vectors": False,
+                        "offset": offset,
+                    }
+                    if sf is not None:
+                        sk["scroll_filter"] = sf
+                    points, next_offset = self._client.scroll(**sk)
                     all_points.extend(points)
                     offset = next_offset
                     remaining -= len(points)

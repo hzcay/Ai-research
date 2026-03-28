@@ -3,7 +3,7 @@ from groq import Groq
 from qdrant_client import QdrantClient
 
 from src.api.dependencies import init_app_dependencies
-from src.api.routes import chat, search
+from src.api.routes import chat, ingest, search
 from src.infrastructure.config.settings import get_settings
 
 app = FastAPI(title="Research Assistant RAG", version="0.1.0")
@@ -49,6 +49,7 @@ async def readiness_check() -> dict:
 
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(search.router, prefix="/search", tags=["search"])
+app.include_router(ingest.router, prefix="/ingest", tags=["ingest"])
 
 if __name__ == "__main__":
     import uvicorn
