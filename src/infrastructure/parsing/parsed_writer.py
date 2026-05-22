@@ -10,7 +10,7 @@ def build_frontmatter(result: Dict[str, Any]) -> str:
     meta = result.get("metadata", {})
     title_safe = str(meta.get("title", "")).replace('"', '\\"')
     authors = meta.get("authors", []) or []
-    escaped_authors = [f"\"{str(a).replace('\"', '\\\\\"')}\"" for a in authors]
+    escaped_authors = ['"' + str(a).replace('"', '\\"') + '"' for a in authors]
     authors_yaml = "[" + ", ".join(escaped_authors) + "]"
     abstract_safe = str(meta.get("abstract", ""))[:300].replace('"', '\\"')
 

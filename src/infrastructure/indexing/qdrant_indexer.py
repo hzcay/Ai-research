@@ -162,16 +162,21 @@ class QdrantIndexer:
                 )
             ]
         )
-        points, _ = self._client.scroll(
-            collection_name=self._collection_name,
-            scroll_filter=flt,
-            limit=1,
-            with_payload=True,
-            with_vectors=False,
-        )
-        if not points:
-            return None
-        p0 = points[0]
-        payload = getattr(p0, "payload", None) or {}
-        doc_id = payload.get("doc_id")
-        return str(doc_id) if doc_id else None
+        try:
+            points, _ = self._client.scroll(
+                collection_name=self._collection_name,
+                scroll_filter=flt,
+                limit=1,
+                with_payload=True,
+                with_vectors=False,
+            )
+            if not points:
+                return None
+            p0 = points[0]
+            payload = getattr(p0, "payload", None) or {}
+            doc_id = payload.get("doc_id")
+            return str(doc_id) if doc_id else None
+        except Exception as e:
+            if "Not found: Collection" in str(e):
+                return None
+            raise

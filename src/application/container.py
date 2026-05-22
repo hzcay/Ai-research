@@ -11,6 +11,39 @@ from src.infrastructure.indexing.document_indexer import DocumentIndexer
 from src.infrastructure.llm.groq_chat_model import GroqChatModel
 from src.infrastructure.parsing.pdf_parser import PdfParser
 from src.infrastructure.vectorstores.qdrant_store import QdrantVectorStore
+from src.application.ports.cache_port import SemanticCachePort
+from src.infrastructure.cache.qdrant_semantic_cache import QdrantSemanticCache
+from src.infrastructure.indexing.task_tracker import TaskTracker
+
+@lru_cache()
+def get_task_tracker() -> TaskTracker:
+    return TaskTracker()
+
+
+@lru_cache()
+def get_embedder() -> BgeEmbedder:
+    settings = get_settings()
+    return BgeEmbedder(model_name=settings.embed_model_name)
+
+
+@lru_cache()
+def get_semantic_cache() -> SemanticCachePort:
+    settings = get_settings()
+    import qdrant_client
+    from qdrant_client.http import models
+    client = qdrant_client.QdrantClient(url=settings.qdrant_url, timeout=settings.qdrant_timeout_s)
+    
+    try:
+        client.get_collection("semantic_cache")
+    except Exception:
+        client.create_collection(
+            collection_name="semantic_cache",
+            vectors_config=models.VectorParams(
+                size=1024,
+                distance=models.Distance.COSINE
+            )
+        )
+    return QdrantSemanticCache(qdrant_client=client, collection_name="semantic_cache")
 
 
 @lru_cache()
@@ -21,7 +54,7 @@ def get_document_indexer() -> DocumentIndexer:
 @lru_cache()
 def get_retrieve_context_use_case() -> RetrieveContextUseCase:
     settings = get_settings()
-    embedder = BgeEmbedder(model_name=settings.embed_model_name)
+    embedder = get_embedder()
     vector_store = QdrantVectorStore(
         qdrant_url=settings.qdrant_url,
         collection_name=settings.qdrant_collection,
@@ -59,3 +92,4 @@ def get_generate_answer_use_case() -> GenerateAnswerUseCase:
 def get_ingest_pdfs_use_case() -> IngestPdfsUseCase:
     parser = PdfParser()
     return IngestPdfsUseCase(parser=parser, indexer=get_document_indexer())
+    

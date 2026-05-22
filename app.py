@@ -43,6 +43,7 @@ def _boot() -> None:
         ("_doc_id", ""),
         ("_doc_label", ""),
         ("_api_url", DEFAULT_API),
+        ("_is_processing", False),
     ]:
         if key not in st.session_state:
             st.session_state[key] = default
@@ -51,6 +52,7 @@ def _boot() -> None:
 def _clear_file() -> None:
     st.session_state._doc_id = ""
     st.session_state._doc_label = ""
+    st.session_state._is_processing = False
 
 
 def _render_sources(ctxs: list) -> None:
@@ -129,10 +131,45 @@ def _upload_pdf_with_force(file_obj, api_base: str, force: bool) -> bool:
     st.session_state._doc_label = file_obj.name or "Uploaded file"
     st.session_state._doc_id = str(did)
     if data.get("status") == "duplicate":
+        st.session_state._is_processing = False
         st.toast("This file is already in your library. Using it now.")
+    elif data.get("status") == "processing":
+        st.session_state._is_processing = True
+        st.toast("File is being processed in background. You can keep chatting.")
     else:
+        st.session_state._is_processing = False
         st.toast("File ready. Ask your question below.")
     return True
+
+@st.fragment(run_every="3s")
+def _processing_status_fragment(doc_id: str, api_base: str):
+    if not doc_id or not st.session_state.get("_is_processing"):
+        return
+        
+    try:
+        with _http(api_base) as c:
+            r = c.get(f"/ingest/status/{doc_id}")
+            if r.status_code == 200:
+                data = r.json()
+                status = data.get("status")
+                progress = data.get("progress", 0)
+                msg = data.get("message", "")
+                
+                if status == "processing":
+                    st.info(f"{msg}")
+                    st.progress(progress / 100.0)
+                elif status == "completed":
+                    st.success(f"{msg}")
+                    st.session_state._is_processing = False
+                    st.rerun()
+                elif status == "failed":
+                    st.error(f"{msg}")
+                    st.session_state._is_processing = False
+                    st.rerun()
+            else:
+                st.warning(f"Status check returned {r.status_code}")
+    except Exception as e:
+        st.error(f"Fragment error: {str(e)}")
 
 
 def main() -> None:
@@ -207,6 +244,9 @@ def main() -> None:
                 if st.button("Clear", key="_remove_file"):
                     _clear_file()
                     st.rerun()
+                    
+    if st.session_state.get("_is_processing") and doc_id:
+        _processing_status_fragment(doc_id, api_base)
 
     if prompt := st.chat_input("Ask a question…"):
         st.session_state.messages.append({"role": "user", "content": prompt})

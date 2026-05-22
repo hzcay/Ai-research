@@ -94,7 +94,9 @@ class QdrantVectorStore(VectorStorePort):
                     return self._client.search(**sp)
 
                 raise AttributeError("Qdrant client has no supported search method.")
-            except Exception:
+            except Exception as e:
+                if "Not found: Collection" in str(e):
+                    return []
                 if attempt >= self._retries:
                     raise
                 time.sleep(0.2 * math.pow(2, attempt))
@@ -163,7 +165,9 @@ class QdrantVectorStore(VectorStorePort):
                     offset = next_offset
                     remaining -= len(points)
                     break
-                except Exception:
+                except Exception as e:
+                    if "Not found: Collection" in str(e):
+                        return []
                     if attempt >= self._retries:
                         raise
                     time.sleep(0.2 * math.pow(2, attempt))
