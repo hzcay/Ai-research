@@ -63,10 +63,3 @@ pytest
 | `src/infrastructure/` | Qdrant, embeddings, parsing, LLM |
 | `tests/` | Pytest API tests |
 
-## Screenshot
-
-_Add a screenshot of the Streamlit chat UI here for your portfolio README (`docs/screenshot.png` optional)._
-
-## License
-
-Use for learning and portfolio; add a license if you publish publicly.
