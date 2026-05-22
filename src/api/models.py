@@ -10,10 +10,27 @@ class ChatRequest(BaseModel):
     auto_expand_corpus: bool = True
 
 
+class Citation(BaseModel):
+    id: int
+    document_name: str
+    page: Optional[int] = None
+    chunk_id: str
+    score: float
+    text: str
+
+class RetrievalDebug(BaseModel):
+    retrieval_mode: str
+    cache_hit: bool
+    embedding_ms: float
+    retrieval_ms: float
+    llm_ms: float
+    total_ms: float
+    top_k: int
+
 class ChatResponse(BaseModel):
     answer: str
-    contexts: List[Dict[str, Any]]
-    retrieval_scope: Optional[str] = None
+    citations: List[Citation]
+    debug: RetrievalDebug
 
 
 class SearchRequest(BaseModel):

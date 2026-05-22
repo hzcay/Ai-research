@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import List, Protocol
+from typing import Any, Dict, Protocol
 
 
 class EmbedderPort(Protocol):
-    def encode_query(self, text: str) -> List[float]:
+    def encode_query(self, text: str) -> Dict[str, Any]:
         ...

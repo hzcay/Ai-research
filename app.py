@@ -55,14 +55,20 @@ def _clear_file() -> None:
     st.session_state._is_processing = False
 
 
-def _render_sources(ctxs: list) -> None:
-    if not ctxs:
+def _render_citations(citations: list) -> None:
+    if not citations:
         return
-    with st.expander(f"References ({len(ctxs)})", expanded=False):
-        for i, ch in enumerate(ctxs, 1):
-            text = str(ch.get("text", ""))
-            preview = text[:600] + ("…" if len(text) > 600 else "")
-            st.markdown(f"**{i}.** {preview}")
+    with st.expander(f"Citations ({len(citations)})", expanded=False):
+        for c in citations:
+            doc_name = c.get("document_name", "Unknown")
+            page = c.get("page", "N/A")
+            score = c.get("score", 0.0)
+            chunk_id = c.get("chunk_id", "N/A")
+            text = str(c.get("text", ""))
+            
+            st.markdown(f"**[{c.get('id')}] {doc_name}**")
+            st.caption(f"Page: {page} | Score: {score} | Chunk: {chunk_id}")
+            st.text(text)
 
 
 def _attach_panel(api_base: str) -> None:
@@ -221,7 +227,28 @@ def main() -> None:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
             if msg["role"] == "assistant":
-                _render_sources(msg.get("sources") or [])
+                _render_citations(msg.get("citations") or [])
+
+    last_debug = None
+    for msg in reversed(st.session_state.messages):
+        if msg["role"] == "assistant" and msg.get("debug"):
+            last_debug = msg["debug"]
+            break
+            
+    if last_debug:
+        with st.sidebar:
+            st.divider()
+            st.subheader("Retrieval Debug")
+            st.metric("Cache", "HIT" if last_debug.get("cache_hit") else "MISS")
+            st.metric("Retrieval Mode", last_debug.get("retrieval_mode", "unknown"))
+            st.metric("Retrieval Latency", f"{last_debug.get('retrieval_ms', 0)} ms")
+            st.metric("Total Latency", f"{last_debug.get('total_ms', 0)} ms")
+            st.metric("Top K", last_debug.get("top_k", 0))
+            
+            with st.expander("Latency Breakdown", expanded=False):
+                st.write(f"**Embedding:** {last_debug.get('embedding_ms', 0)} ms")
+                st.write(f"**Vector Search:** {last_debug.get('retrieval_ms', 0)} ms")
+                st.write(f"**LLM Generation:** {last_debug.get('llm_ms', 0)} ms")
 
     doc_id = (st.session_state._doc_id or "").strip()
     doc_label = (st.session_state._doc_label or "").strip()
@@ -270,13 +297,15 @@ def main() -> None:
                     }
 
             answer = data.get("answer") or ""
-            ctxs = data.get("contexts") or []
+            citations = data.get("citations") or []
+            debug = data.get("debug") or {}
             st.markdown(answer)
-            _render_sources(ctxs)
+            _render_citations(citations)
 
         st.session_state.messages.append(
-            {"role": "assistant", "content": answer, "sources": ctxs}
+            {"role": "assistant", "content": answer, "citations": citations, "debug": debug}
         )
+        st.rerun()
 
 
 if __name__ == "__main__":

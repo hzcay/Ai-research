@@ -5,8 +5,8 @@ from typing import Any, Dict, List, Tuple
 
 import qdrant_client
 from qdrant_client import models
-from qdrant_client.http.models import Distance, VectorParams
-from sentence_transformers import SentenceTransformer
+from qdrant_client.http.models import Distance, VectorParams, SparseVectorParams, SparseIndexParams
+from FlagEmbedding import BGEM3FlagModel
 
 from src.infrastructure.indexing.chunker import (
     build_doc_id,
@@ -14,13 +14,13 @@ from src.infrastructure.indexing.chunker import (
     test_chunk_sizes,
 )
 
-_EMBED_MODELS: dict[str, SentenceTransformer] = {}
+_EMBED_MODELS: dict[str, BGEM3FlagModel] = {}
 
 
-def _get_embed_model(model_name: str) -> SentenceTransformer:
+def _get_embed_model(model_name: str) -> BGEM3FlagModel:
     model = _EMBED_MODELS.get(model_name)
     if model is None:
-        model = SentenceTransformer(model_name)
+        model = BGEM3FlagModel(model_name, use_fp16=True)
         _EMBED_MODELS[model_name] = model
     return model
 
@@ -96,7 +96,7 @@ class QdrantIndexer:
         if not vectors:
             return 0
 
-        self._create_collection(vector_size=len(vectors[0]))
+        self._create_collection(vector_size=len(vectors[0]["dense"]))
 
         points: List[models.PointStruct] = []
         for c, vec in zip(chunks, vectors):
@@ -114,7 +114,16 @@ class QdrantIndexer:
                 "related_chunk_ids": c.get("related_chunk_ids", []),
                 "metadata": c.get("metadata", {}),
             }
-            points.append(models.PointStruct(id=point_id, vector=vec, payload=payload))
+            
+            qdrant_vector = {
+                "dense": vec["dense"],
+                "sparse": models.SparseVector(
+                    indices=vec["sparse"]["indices"],
+                    values=vec["sparse"]["values"]
+                )
+            }
+            
+            points.append(models.PointStruct(id=point_id, vector=qdrant_vector, payload=payload))
 
         self._client.upsert(collection_name=self._collection_name, points=points, wait=True)
         return len(points)
@@ -132,21 +141,49 @@ class QdrantIndexer:
             return
         self._client.create_collection(
             collection_name=self._collection_name,
-            vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
+            vectors_config={
+                "dense": VectorParams(size=vector_size, distance=Distance.COSINE)
+            },
+            sparse_vectors_config={
+                "sparse": SparseVectorParams(
+                    index=SparseIndexParams(
+                        on_disk=False,
+                    )
+                )
+            }
         )
 
-    def _embed_texts(self, texts: List[str]) -> List[List[float]]:
+    def _embed_texts(self, texts: List[str]) -> List[Dict[str, Any]]:
         if not texts:
             return []
         model = _get_embed_model(self._embed_model_name)
-        vecs = model.encode(
+        output = model.encode(
             texts,
             batch_size=16,
-            show_progress_bar=False,
-            normalize_embeddings=True,
-            convert_to_numpy=True,
+            return_dense=True,
+            return_sparse=True,
+            return_colbert_vecs=False
         )
-        return [v.tolist() for v in vecs]
+        
+        dense_vecs = [v.tolist() for v in output['dense_vecs']]
+        lexical_weights = output['lexical_weights']
+        
+        result = []
+        for dense, lex in zip(dense_vecs, lexical_weights):
+            indices = []
+            values = []
+            for k, v in lex.items():
+                indices.append(int(k))
+                values.append(float(v))
+            result.append({
+                "dense": dense,
+                "sparse": {
+                    "indices": indices,
+                    "values": values
+                }
+            })
+            
+        return result
 
     def find_doc_id_by_content_hash(self, content_hash: str) -> str | None:
         if not content_hash:

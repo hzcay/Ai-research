@@ -17,11 +17,7 @@ async def chat(req: ChatRequest, settings=Depends(get_settings_dep)) -> ChatResp
     if req.document_id:
         task = tracker.get_task(req.document_id)
         if task and task.get("status") == "processing":
-            return ChatResponse(
-                answer="Tài liệu này vẫn đang được hệ thống phân tích. Quá trình này tốn chút thời gian, vui lòng theo dõi thanh tiến độ!",
-                contexts=[],
-                retrieval_scope="processing"
-            )
+            req.document_id = None
 
     generate_use_case = get_generate_answer_use_case()
 
@@ -32,6 +28,6 @@ async def chat(req: ChatRequest, settings=Depends(get_settings_dep)) -> ChatResp
     )
     return ChatResponse(
         answer=gen["answer"],
-        contexts=gen["contexts"],
-        retrieval_scope=gen.get("retrieval_scope"),
+        citations=gen.get("citations", []),
+        debug=gen.get("debug", {}),
     )

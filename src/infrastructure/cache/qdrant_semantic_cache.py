@@ -34,7 +34,6 @@ class QdrantSemanticCache(SemanticCachePort):
 
         cache_id = best.payload.get("cache_id")
         if not cache_id:
-            # Fallback for old cache format
             if "answer" in best.payload:
                 return {
                     "answer": best.payload["answer"],

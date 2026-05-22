@@ -1,20 +1,37 @@
 from __future__ import annotations
 
-from typing import List
+from typing import Any, Dict
 
-from sentence_transformers import SentenceTransformer
+from FlagEmbedding import BGEM3FlagModel
 
 from src.application.ports.embedder_port import EmbedderPort
 
 
 class BgeEmbedder(EmbedderPort):
     def __init__(self, model_name: str) -> None:
-        self._model = SentenceTransformer(model_name)
+        self._model = BGEM3FlagModel(model_name, use_fp16=True)
 
-    def encode_query(self, text: str) -> List[float]:
-        vector = self._model.encode(
-            text,
-            normalize_embeddings=True,
-            convert_to_numpy=True,
+    def encode_query(self, text: str) -> Dict[str, Any]:
+        output = self._model.encode(
+            [text],
+            return_dense=True,
+            return_sparse=True,
+            return_colbert_vecs=False
         )
-        return vector.tolist()
+        
+        dense_vec = output['dense_vecs'][0].tolist()
+        lexical_dict = output['lexical_weights'][0]
+        
+        indices = []
+        values = []
+        for k, v in lexical_dict.items():
+            indices.append(int(k))
+            values.append(float(v))
+            
+        return {
+            "dense": dense_vec,
+            "sparse": {
+                "indices": indices,
+                "values": values
+            }
+        }

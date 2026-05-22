@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import math
-import re
 import time
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 import qdrant_client
 from qdrant_client import models
@@ -37,15 +36,14 @@ class QdrantVectorStore(VectorStorePort):
         self._client = qdrant_client.QdrantClient(url=qdrant_url, timeout=timeout_s)
         self._collection_name = collection_name
         self._retries = max(0, retries)
-        self._lexical_candidate_limit = max(10, lexical_candidate_limit)
 
     def search(
         self,
-        query_vector: List[float],
+        query_vectors: Dict[str, Any],
         top_k: int,
         document_id: Optional[str] = None,
     ) -> List[RetrievedChunk]:
-        hits = self._query(query_vector=query_vector, top_k=top_k, document_id=document_id)
+        hits = self._query(query_vectors=query_vectors, top_k=top_k, document_id=document_id)
         output: List[RetrievedChunk] = []
         for hit in hits:
             payload = getattr(hit, "payload", None) or {}
@@ -63,37 +61,49 @@ class QdrantVectorStore(VectorStorePort):
 
     def _query(
         self,
-        query_vector: List[float],
+        query_vectors: Dict[str, Any],
         top_k: int,
         document_id: Optional[str] = None,
     ) -> List[Any]:
         qf = _doc_id_filter(document_id)
+        
+        dense_vec = query_vectors.get("dense")
+        sparse_vec = query_vectors.get("sparse")
+        
+        prefetch = []
+        if dense_vec:
+            p = models.Prefetch(
+                query=dense_vec,
+                using="dense",
+                limit=top_k * 3,
+            )
+            if qf is not None:
+                p.filter = qf
+            prefetch.append(p)
+            
+        if sparse_vec:
+            p = models.Prefetch(
+                query=models.SparseVector(
+                    indices=sparse_vec["indices"],
+                    values=sparse_vec["values"]
+                ),
+                using="sparse",
+                limit=top_k * 3,
+            )
+            if qf is not None:
+                p.filter = qf
+            prefetch.append(p)
+
         for attempt in range(self._retries + 1):
             try:
-                if hasattr(self._client, "query_points"):
-                    qp: dict[str, Any] = {
-                        "collection_name": self._collection_name,
-                        "query": query_vector,
-                        "limit": top_k,
-                        "with_payload": True,
-                    }
-                    if qf is not None:
-                        qp["query_filter"] = qf
-                    response = self._client.query_points(**qp)
-                    return list(response.points)
-
-                if hasattr(self._client, "search"):
-                    sp: dict[str, Any] = {
-                        "collection_name": self._collection_name,
-                        "query_vector": query_vector,
-                        "limit": top_k,
-                        "with_payload": True,
-                    }
-                    if qf is not None:
-                        sp["query_filter"] = qf
-                    return self._client.search(**sp)
-
-                raise AttributeError("Qdrant client has no supported search method.")
+                response = self._client.query_points(
+                    collection_name=self._collection_name,
+                    prefetch=prefetch,
+                    query=models.FusionQuery(fusion=models.Fusion.RRF),
+                    limit=top_k,
+                    with_payload=True,
+                )
+                return list(response.points)
             except Exception as e:
                 if "Not found: Collection" in str(e):
                     return []
@@ -101,89 +111,3 @@ class QdrantVectorStore(VectorStorePort):
                     raise
                 time.sleep(0.2 * math.pow(2, attempt))
         return []
-
-    def keyword_search(
-        self,
-        query_text: str,
-        top_k: int,
-        document_id: Optional[str] = None,
-    ) -> List[RetrievedChunk]:
-        terms = _tokenize(query_text)
-        if not terms:
-            return []
-
-        points = self._scroll_payloads(
-            limit=self._lexical_candidate_limit,
-            document_id=document_id,
-        )
-        scored: List[tuple[float, Any]] = []
-        for p in points:
-            payload = getattr(p, "payload", None) or {}
-            text = str(payload.get("text") or payload.get("content") or "")
-            if not text:
-                continue
-            score = _keyword_overlap_score(terms, _tokenize(text))
-            if score > 0:
-                scored.append((score, p))
-
-        scored.sort(key=lambda x: x[0], reverse=True)
-        output: List[RetrievedChunk] = []
-        for score, p in scored[:top_k]:
-            payload = getattr(p, "payload", None) or {}
-            text = payload.get("text") or payload.get("content") or ""
-            output.append(
-                RetrievedChunk(
-                    id=str(getattr(p, "id", "")),
-                    score=score,
-                    text=text,
-                    metadata=payload.get("metadata", {}),
-                    payload=payload,
-                )
-            )
-        return output
-
-    def _scroll_payloads(self, limit: int, document_id: Optional[str] = None) -> List[Any]:
-        all_points: List[Any] = []
-        offset = None
-        remaining = limit
-        sf = _doc_id_filter(document_id)
-        while remaining > 0:
-            batch_size = min(128, remaining)
-            for attempt in range(self._retries + 1):
-                try:
-                    sk: dict[str, Any] = {
-                        "collection_name": self._collection_name,
-                        "limit": batch_size,
-                        "with_payload": True,
-                        "with_vectors": False,
-                        "offset": offset,
-                    }
-                    if sf is not None:
-                        sk["scroll_filter"] = sf
-                    points, next_offset = self._client.scroll(**sk)
-                    all_points.extend(points)
-                    offset = next_offset
-                    remaining -= len(points)
-                    break
-                except Exception as e:
-                    if "Not found: Collection" in str(e):
-                        return []
-                    if attempt >= self._retries:
-                        raise
-                    time.sleep(0.2 * math.pow(2, attempt))
-            if offset is None:
-                break
-        return all_points
-
-
-def _tokenize(text: str) -> set[str]:
-    return {t for t in re.findall(r"[a-zA-Z0-9_\-]{2,}", text.lower())}
-
-
-def _keyword_overlap_score(query_terms: set[str], doc_terms: set[str]) -> float:
-    if not query_terms or not doc_terms:
-        return 0.0
-    inter = len(query_terms.intersection(doc_terms))
-    if inter == 0:
-        return 0.0
-    return inter / len(query_terms)
