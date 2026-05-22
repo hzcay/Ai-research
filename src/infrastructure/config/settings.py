@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     qdrant_collection: str = "research_chunks"
     embed_model_name: str = "BAAI/bge-m3"
 
+    redis_url: str = "redis://localhost:6379/0"
+    cache_ttl_seconds: int = 86400
+
     groq_api_key: str | None = None
     groq_model: str = "meta-llama/llama-4-scout-17b-16e-instruct"
     groq_model_2: str = "llama-3.1-8b-instant"

@@ -27,23 +27,26 @@ def get_embedder() -> BgeEmbedder:
 
 
 @lru_cache()
-def get_semantic_cache() -> SemanticCachePort:
+def get_redis_client():
+    import redis
     settings = get_settings()
-    import qdrant_client
-    from qdrant_client.http import models
-    client = qdrant_client.QdrantClient(url=settings.qdrant_url, timeout=settings.qdrant_timeout_s)
+    return redis.Redis.from_url(settings.redis_url, decode_responses=True)
+
+
+@lru_cache()
+def get_semantic_cache() -> SemanticCachePort:
+    from qdrant_client import QdrantClient
     
-    try:
-        client.get_collection("semantic_cache")
-    except Exception:
-        client.create_collection(
-            collection_name="semantic_cache",
-            vectors_config=models.VectorParams(
-                size=1024,
-                distance=models.Distance.COSINE
-            )
-        )
-    return QdrantSemanticCache(qdrant_client=client, collection_name="semantic_cache")
+    settings = get_settings()
+    client = QdrantClient(url=settings.qdrant_url)
+    redis_client = get_redis_client()
+    
+    return QdrantSemanticCache(
+        qdrant_client=client,
+        redis_client=redis_client,
+        cache_ttl_seconds=settings.cache_ttl_seconds,
+        collection_name="semantic_cache"
+    )
 
 
 @lru_cache()
