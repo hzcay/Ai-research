@@ -15,7 +15,7 @@ Unlike basic RAGs that rely solely on Dense embeddings (Semantic) or perform "fa
 * **BGE-M3 (FlagEmbedding):** Extracts both 1024-dimensional **Dense Vectors** (Semantic context) and **Sparse Vectors** (Lexical/BM25 exact match weights) simultaneously.
 * **Qdrant Native RRF:** Both vectors are sent to Qdrant's C++ engine via the `Prefetch` Query API. Qdrant performs the multi-stage search and **Reciprocal Rank Fusion (RRF)** natively, eliminating Python-side bottlenecks and Out-Of-Memory (OOM) risks.
 
-### 2. ⚡ Distributed Cache Pattern
+### 2. Distributed Cache Pattern
 To optimize latency and memory, the system decouples vector search from payload retrieval:
 * **Qdrant** acts strictly as the Vector Index (storing only dense/sparse arrays and lightweight `cache_id`s).
 * **Redis** acts as the high-speed KV Store for storing heavy document payloads (Markdown chunks, metadata) with strict Time-To-Live (TTL) management.
