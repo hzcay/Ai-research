@@ -58,7 +58,7 @@ def _clear_file() -> None:
 def _render_citations(citations: list) -> None:
     if not citations:
         return
-    with st.expander(f"Citations ({len(citations)})", expanded=False):
+    with st.expander(f"View {len(citations)} Source Citations", expanded=False):
         for c in citations:
             doc_name = c.get("document_name", "Unknown")
             page = c.get("page", "N/A")
@@ -66,9 +66,20 @@ def _render_citations(citations: list) -> None:
             chunk_id = c.get("chunk_id", "N/A")
             text = str(c.get("text", ""))
             
-            st.markdown(f"**[{c.get('id')}] {doc_name}**")
-            st.caption(f"Page: {page} | Score: {score} | Chunk: {chunk_id}")
-            st.text(text)
+            st.markdown(f"### [{c.get('id')}] {doc_name}")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Page", page)
+            
+            try:
+                formatted_score = f"{float(score):.3f}"
+            except (ValueError, TypeError):
+                formatted_score = score
+                
+            col2.metric("Relevance Score", formatted_score)
+            col3.metric("Chunk ID", chunk_id)
+            
+            st.info(text)
+            st.divider()
 
 
 def _attach_panel(api_base: str) -> None:
@@ -219,9 +230,12 @@ def main() -> None:
 
     api_base = _api()
 
-    st.markdown("## Research assistant")
+    st.markdown("## AI Research Assistant Platform")
+    st.caption("Hybrid Retrieval • Citation Tracing • Retrieval Observability")
+    st.divider()
+    
     if not st.session_state.messages:
-        st.caption("Ask about your research library, or attach a PDF to focus on one paper.")
+        st.info("Ask about your research library, or attach a PDF to focus on one paper.")
 
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
@@ -239,16 +253,22 @@ def main() -> None:
         with st.sidebar:
             st.divider()
             st.subheader("Retrieval Debug")
-            st.metric("Cache", "HIT" if last_debug.get("cache_hit") else "MISS")
-            st.metric("Retrieval Mode", last_debug.get("retrieval_mode", "unknown"))
-            st.metric("Retrieval Latency", f"{last_debug.get('retrieval_ms', 0)} ms")
-            st.metric("Total Latency", f"{last_debug.get('total_ms', 0)} ms")
-            st.metric("Top K", last_debug.get("top_k", 0))
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Cache Status", "HIT" if last_debug.get("cache_hit") else "MISS")
+                st.metric("Ret. Mode", last_debug.get("retrieval_mode", "unknown"))
+            with col2:
+                st.metric("Top K", last_debug.get("top_k", 0))
+                st.metric("Total Latency", f"{last_debug.get('total_ms', 0)} ms")
             
-            with st.expander("Latency Breakdown", expanded=False):
-                st.write(f"**Embedding:** {last_debug.get('embedding_ms', 0)} ms")
-                st.write(f"**Vector Search:** {last_debug.get('retrieval_ms', 0)} ms")
-                st.write(f"**LLM Generation:** {last_debug.get('llm_ms', 0)} ms")
+            st.markdown("#### Latency Breakdown")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.metric("Embedding Time", f"{last_debug.get('embedding_ms', 0)} ms")
+            with c2:
+                st.metric("Retrieval Time", f"{last_debug.get('retrieval_ms', 0)} ms")
+            
+            st.metric("LLM Generation", f"{last_debug.get('llm_ms', 0)} ms")
 
     doc_id = (st.session_state._doc_id or "").strip()
     doc_label = (st.session_state._doc_label or "").strip()
