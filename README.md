@@ -37,6 +37,10 @@ Built for transparency, ensuring the LLM is truly grounded:
 
 ## System Architecture
 
+![Flow Diagram](photo/uml/flow_diagram.png)
+
+![Flow Mini-Diagram](photo/uml/flow_mini_diagram.png)
+
 ```text
 src/
 ├── api/             # FastAPI Routers & Pydantic Models
