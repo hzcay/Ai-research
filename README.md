@@ -1,13 +1,11 @@
 # Enterprise-Grade RAG System (Research Assistant)
-
+roduction-oriented Retrieval-Augmented Generation (RAG) system for academic and technical research.
+Built with FastAPI, Qdrant, Redis, and BGE-M3 hybrid retrieval to support scalable document ingestion, grounded question answering, and retrieval observability.
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-00a393.svg)
 ![Qdrant](https://img.shields.io/badge/Qdrant-Vector_Database-ff5252.svg)
 ![Redis](https://img.shields.io/badge/Redis-Distributed_Cache-dc382d.svg)
 ![Streamlit](https://img.shields.io/badge/Streamlit-UI-FF4B4B.svg)
-
-An advanced, production-ready **Retrieval-Augmented Generation (RAG)** system designed specifically for academic and technical research. Built with **Clean Architecture (Hexagonal / Ports & Adapters)**, this project demonstrates how to scale RAG pipelines beyond simple tutorials into robust, high-performance enterprise applications.
-
 ## Key Features & Architecture Highlights
 
 ### 1. True Multi-Stage Hybrid Retrieval
