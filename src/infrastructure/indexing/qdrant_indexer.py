@@ -13,16 +13,19 @@ from src.infrastructure.indexing.chunker import (
     chunk_markdown_with_tables,
     test_chunk_sizes,
 )
+import threading
 
 _EMBED_MODELS: dict[str, BGEM3FlagModel] = {}
+_embed_lock = threading.Lock()
 
 
 def _get_embed_model(model_name: str) -> BGEM3FlagModel:
-    model = _EMBED_MODELS.get(model_name)
-    if model is None:
-        model = BGEM3FlagModel(model_name, use_fp16=True)
-        _EMBED_MODELS[model_name] = model
-    return model
+    with _embed_lock:
+        model = _EMBED_MODELS.get(model_name)
+        if model is None:
+            model = BGEM3FlagModel(model_name, use_fp16=True)
+            _EMBED_MODELS[model_name] = model
+        return model
 
 
 class QdrantIndexer:
@@ -157,13 +160,14 @@ class QdrantIndexer:
         if not texts:
             return []
         model = _get_embed_model(self._embed_model_name)
-        output = model.encode(
-            texts,
-            batch_size=16,
-            return_dense=True,
-            return_sparse=True,
-            return_colbert_vecs=False
-        )
+        with _embed_lock:
+            output = model.encode(
+                texts,
+                batch_size=16,
+                return_dense=True,
+                return_sparse=True,
+                return_colbert_vecs=False
+            )
         
         dense_vecs = [v.tolist() for v in output['dense_vecs']]
         lexical_weights = output['lexical_weights']

@@ -72,7 +72,6 @@ class GenerateAnswerUseCase:
         start_llm = time.perf_counter()
         result = self._answer_from_chunks(query, chunks, scope)
         
-        # Check fallback
         if self._is_refusal(result["answer"]) and document_id and auto_expand_corpus:
             chunks, metrics = gather(None)
             start_llm_fallback = time.perf_counter()

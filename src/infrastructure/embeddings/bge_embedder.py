@@ -1,23 +1,26 @@
 from __future__ import annotations
 
+import threading
 from typing import Any, Dict
 
 from FlagEmbedding import BGEM3FlagModel
 
 from src.application.ports.embedder_port import EmbedderPort
 
-
 class BgeEmbedder(EmbedderPort):
     def __init__(self, model_name: str) -> None:
-        self._model = BGEM3FlagModel(model_name, use_fp16=True)
+        self._lock = threading.Lock()
+        with self._lock:
+            self._model = BGEM3FlagModel(model_name, use_fp16=True)
 
     def encode_query(self, text: str) -> Dict[str, Any]:
-        output = self._model.encode(
-            [text],
-            return_dense=True,
-            return_sparse=True,
-            return_colbert_vecs=False
-        )
+        with self._lock:
+            output = self._model.encode(
+                [text],
+                return_dense=True,
+                return_sparse=True,
+                return_colbert_vecs=False
+            )
         
         dense_vec = output['dense_vecs'][0].tolist()
         lexical_dict = output['lexical_weights'][0]

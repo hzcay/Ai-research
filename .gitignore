@@ -4,5 +4,6 @@
 data/
 .pytest_cache/
 docker/ollama_data/
+cvpr_papers_by_topic/
 *.log
 __pycache__/

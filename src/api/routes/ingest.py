@@ -24,7 +24,7 @@ def _get_peak_memory_mb() -> float:
     except ImportError:
         return 0.0
 
-def _process_document(raw: bytes, filename: str, content_hash: str, doc_id: str):
+def _process_document(saved_path: Path, filename: str, content_hash: str, doc_id: str):
     tracker = get_task_tracker()
     settings = get_settings()
     indexer = get_document_indexer()
@@ -40,15 +40,8 @@ def _process_document(raw: bytes, filename: str, content_hash: str, doc_id: str)
         upsert_time = 0.0
         
         try:
-            tracker.update_task(doc_id, "processing", 10, "Lưu file tạm thời...")
-            upload_root = Path(settings.upload_dir)
-            upload_root.mkdir(parents=True, exist_ok=True)
-            import re
-            base = Path(filename).name
-            safe = re.sub(r"[^\w.\-]", "_", base).strip("._") or "upload"
-            safe = safe[:200]
-            saved = upload_root / f"{content_hash[:16]}_{safe}"
-            saved.write_bytes(raw)
+            tracker.update_task(doc_id, "processing", 10, "Bắt đầu xử lý file tạm...")
+            saved = saved_path
             
             tracker.update_task(doc_id, "processing", 30, "Đang phân tích cấu trúc PDF (Docling)...")
             t0 = time.time()
@@ -134,7 +127,17 @@ async def ingest_upload(
     tracker = get_task_tracker()
     tracker.create_task(doc_id)
     
-    background_tasks.add_task(_process_document, raw, name, content_hash, doc_id)
+    # TỐI ƯU RAM: Ghi file xuống ổ cứng ngay lập tức, không để ngậm trên RAM
+    settings = get_settings()
+    upload_root = Path(settings.upload_dir)
+    upload_root.mkdir(parents=True, exist_ok=True)
+    import re
+    safe = re.sub(r"[^\w.\-]", "_", name).strip("._") or "upload"
+    saved_path = upload_root / f"{content_hash[:16]}_{safe[:200]}"
+    saved_path.write_bytes(raw)
+    
+    # Chỉ ném "đường dẫn" vào Queue thay vì cả cục bytes
+    background_tasks.add_task(_process_document, saved_path, name, content_hash, doc_id)
     
     return {
         "status": "processing",

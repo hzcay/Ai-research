@@ -6,6 +6,8 @@ from typing import Any, Dict, List
 
 import fitz
 from docling.document_converter import DocumentConverter
+import threading
+
 from src.infrastructure.parsing.parsed_writer import save_parsed
 
 MAX_SANE_TITLE_LEN = 200
@@ -231,18 +233,20 @@ def _extract_authors_from_markdown(markdown: str, title: str) -> List[str]:
 
 
 _converter: DocumentConverter | None = None
-
+_docling_lock = threading.Lock()
 
 def _get_converter() -> DocumentConverter:
     global _converter
-    if _converter is None:
-        _converter = DocumentConverter()
-    return _converter
+    with _docling_lock:
+        if _converter is None:
+            _converter = DocumentConverter()
+        return _converter
 
 
 def _parse_with_docling(pdf_path: Path) -> Dict[str, Any]:
     converter = _get_converter()
-    result = converter.convert(pdf_path)
+    with _docling_lock:
+        result = converter.convert(pdf_path)
     doc = result.document
     markdown = doc.export_to_markdown()
 
