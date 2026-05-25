@@ -14,6 +14,11 @@ from src.infrastructure.vectorstores.qdrant_store import QdrantVectorStore
 from src.application.ports.cache_port import SemanticCachePort
 from src.infrastructure.cache.qdrant_semantic_cache import QdrantSemanticCache
 from src.infrastructure.indexing.task_tracker import TaskTracker
+from src.utils.metrics import GlobalMetricsTracker
+
+@lru_cache()
+def get_global_metrics() -> GlobalMetricsTracker:
+    return GlobalMetricsTracker()
 
 @lru_cache()
 def get_task_tracker() -> TaskTracker:
