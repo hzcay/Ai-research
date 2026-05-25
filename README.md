@@ -7,6 +7,9 @@
 
 production-oriented Retrieval-Augmented Generation (RAG) system for academic and technical research.
 Built with FastAPI, Qdrant, Redis, and BGE-M3 hybrid retrieval to support scalable document ingestion, grounded question answering, and retrieval observability.
+## Quick demo
+
+https://github.com/user-attachments/assets/141681c7-0ad6-487a-a2ce-e6c93a29f92f
 
 ## Key Features & Architecture Highlights
 
@@ -64,10 +67,6 @@ src/
 ---
 
 ## Getting Started
-### Quick demo
-
-https://github.com/user-attachments/assets/141681c7-0ad6-487a-a2ce-e6c93a29f92f
-
 ### Prerequisites
 - Python 3.11+
 - Docker & Docker Compose
