@@ -37,6 +37,67 @@ Built for transparency, ensuring the LLM is truly grounded:
   * Cache Hit/Miss status.
   * Micro-latencies breakdown: *Embedding Time*, *Vector Search Time*, *LLM Generation Time*.
 * **Context Inspector:** Users can expand citations to inspect the exact Chunk ID, Document Name, Page Number, and Similarity Score used by the LLM.
+### 5. Concurrent Ingestion Benchmark
+
+The ingestion pipeline is benchmarked using concurrent PDF uploads through the HTTP API layer.
+
+The benchmark simulates multiple users uploading documents simultaneously to evaluate:
+- API responsiveness
+- ingestion stability
+- queue behavior
+- resource saturation under constrained local hardware
+
+#### Benchmark Setup
+
+**Hardware**
+- Intel i5-5200U
+- 16GB RAM
+- CPU-only environment
+
+**Pipeline Constraints**
+- Bounded ingestion workers: 2
+- Disk-backed intermediate storage enabled
+
+#### Test Scenarios
+
+- Batch 5 concurrent uploads
+- Batch 10 concurrent uploads
+
+#### Metrics
+
+- Success / failure count
+- API response latency
+- Average ingestion time
+- P95 ingestion time
+- Throughput
+- Queue saturation behavior
+
+#### Benchmark Results
+
+| Batch Size | Success / Fail | Total Time | Avg API Latency | Avg Ingestion | P95 Ingestion | Throughput |
+|------------|----------------|------------|-----------------|---------------|---------------|------------|
+| 5 Users    | 5 / 0          | 1140.05s   | 0.15s           | 732.95s       | 1109.52s      | 0.26 files/min |
+| 10 Users   | 10 / 0         | 2201.66s   | 0.11s           | 1245.29s      | 2128.30s      | 0.27 files/min |
+
+#### Benchmark Analysis
+
+The API layer remained responsive under concurrent uploads due to asynchronous request handling.
+
+However, ingestion throughput degraded significantly as embedding generation saturated available CPU resources during concurrent PDF parsing and BGE-M3 embedding workloads.
+
+Under bounded concurrency, increasing upload bursts primarily increased queue waiting time rather than API latency or overall throughput.
+
+The benchmark demonstrates graceful degradation behavior:
+- the API layer remained responsive
+- ingestion tasks completed successfully
+- throughput remained bounded by available worker capacity
+- no ingestion failures or server crashes were observed
+
+#### Performance Notes
+
+These benchmarks were executed on CPU-only local hardware and are intended to analyze architectural behavior and bottlenecks rather than represent production-scale throughput.
+
+Stress testing beyond 10 concurrent uploads was intentionally avoided due to thermal saturation and diminishing benchmarking value on constrained hardware.
 
 ---
 

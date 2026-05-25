@@ -148,7 +148,7 @@ async def ingest_upload(
     }
 
 @router.get("/status/{doc_id}")
-def get_task_status(doc_id: str):
+async def get_task_status(doc_id: str):
     tracker = get_task_tracker()
     task = tracker.get_task(doc_id)
     if not task:
