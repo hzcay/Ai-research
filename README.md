@@ -11,6 +11,17 @@ Built with FastAPI, Qdrant, Redis, and BGE-M3 hybrid retrieval to support scalab
 
 https://github.com/user-attachments/assets/141681c7-0ad6-487a-a2ce-e6c93a29f92f
 
+## Why This Project?
+
+Most open-source RAG (Retrieval-Augmented Generation) tutorials rely heavily on high-level orchestration frameworks (like LangChain or LlamaIndex), which often obscure the underlying mechanics and lead to inefficient, unscalable "toy" applications.
+
+This project was built from the ground up with a **Production-First Mindset** to solve real-world engineering challenges in RAG systems:
+- **Transparency & Trust:** Providing deep *Retrieval Observability* and strict citation tracking so users can verify exactly where the LLM's answers come from.
+- **True Hybrid Search:** Moving beyond naive Python-side keyword filtering by leveraging native database-level dense and sparse vector fusion.
+- **Resource Efficiency:** Implementing custom asynchronous pipelines and concurrency guards to parse and embed heavy documents reliably, even on constrained local hardware without running out of memory (OOM).
+
+It serves as a robust, scalable boilerplate for anyone looking to build reliable, production-oriented AI research assistants.
+
 ## Key Features & Architecture Highlights
 
 ### 1. True Multi-Stage Hybrid Retrieval
@@ -99,6 +110,12 @@ These benchmarks were executed on CPU-only local hardware and are intended to an
 
 Stress testing beyond 10 concurrent uploads was intentionally avoided due to thermal saturation and diminishing benchmarking value on constrained hardware.
 
+#### Observed Bottlenecks
+
+- **CPU Saturation:** Both `Docling` layout parsing and `BGE-M3` vector encoding are heavily CPU-bound. In a CPU-only environment, this creates a strict upper limit on ingestion throughput.
+- **In-Memory Task Tracking:** The current `TaskTracker` resides in the FastAPI process memory, making it vulnerable to data loss if the server restarts during long ingestion queues.
+- **ThreadPool Contention:** Running heavy CPU tasks in Starlette's default `BackgroundTasks` ThreadPool requires strict concurrency controls (like `Semaphore`) to prevent starvation of synchronous API endpoints.
+
 ---
 
 ## System Architecture
@@ -124,6 +141,18 @@ src/
 - **Embedding Model:** BAAI/bge-m3 (via `FlagEmbedding`)
 - **LLM Provider:** Groq (Llama-3/Mixtral)
 - **Document Parsing:** Docling / PyMuPDF
+
+---
+
+## Future Work
+
+To evolve this system into a globally scalable enterprise architecture, the following improvements are planned:
+- Celery / distributed ingestion workers
+- Redis-backed persistent task tracking
+- GPU embedding workers
+- Distributed ingestion queues
+- Retrieval evaluation datasets
+- Prometheus / Grafana observability
 
 ---
 
