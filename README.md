@@ -13,15 +13,28 @@ https://github.com/user-attachments/assets/141681c7-0ad6-487a-a2ce-e6c93a29f92f
 
 ## Why This Project?
 
-Most open-source RAG (Retrieval-Augmented Generation) tutorials rely heavily on high-level orchestration frameworks (like LangChain or LlamaIndex), which often obscure the underlying mechanics and lead to inefficient, unscalable "toy" applications.
+Most open-source RAG (Retrieval-Augmented Generation) tutorials focus primarily on orchestration frameworks and small-scale demos, often hiding the underlying retrieval pipeline and system behavior.
 
-This project was built from the ground up with a **Production-First Mindset** to solve real-world engineering challenges in RAG systems:
-- **Transparency & Trust:** Providing deep *Retrieval Observability* and strict citation tracking so users can verify exactly where the LLM's answers come from.
-- **True Hybrid Search:** Moving beyond naive Python-side keyword filtering by leveraging native database-level dense and sparse vector fusion.
-- **Resource Efficiency:** Implementing custom asynchronous pipelines and concurrency guards to parse and embed heavy documents reliably, even on constrained local hardware without running out of memory (OOM).
+This project was built to explore the engineering challenges involved in developing more reliable and observable retrieval systems, including:
 
-It serves as a robust, scalable boilerplate for anyone looking to build reliable, production-oriented AI research assistants.
+### Retrieval Transparency & Observability
+The system exposes retrieval telemetry, citation tracing, and chunk-level inspection so users can understand where generated responses originate from.
 
+### Hybrid Retrieval Architecture
+Instead of relying on Python-side keyword filtering, the project uses native database-level dense and sparse retrieval fusion through Qdrant and BGE-M3 embeddings.
+
+### Resource-Constrained Ingestion
+The ingestion pipeline includes asynchronous processing, bounded concurrency, and disk-backed intermediate storage to improve stability during concurrent document uploads on CPU-only local hardware.
+
+### Production-Oriented System Design
+The architecture emphasizes:
+- separation of concerns
+- retrieval evaluation
+- ingestion benchmarking
+- scalability analysis
+- graceful degradation under load
+
+Rather than serving as a simple chatbot wrapper, the project is intended as an experimentation platform for studying retrieval behavior, ingestion scalability, and AI system observability.
 ## Key Features & Architecture Highlights
 
 ### 1. True Multi-Stage Hybrid Retrieval
