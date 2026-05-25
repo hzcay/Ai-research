@@ -26,8 +26,17 @@ async def chat(req: ChatRequest, settings=Depends(get_settings_dep)) -> ChatResp
         document_id=req.document_id,
         auto_expand_corpus=req.auto_expand_corpus,
     )
+    from src.application.container import get_global_metrics
+    debug_info = gen.get("debug", {})
+    metrics = get_global_metrics()
+    
+    if "cache_hit" in debug_info:
+        metrics.record_cache(hit=debug_info["cache_hit"])
+        
+    debug_info["global_metrics"] = metrics.get_summary()
+
     return ChatResponse(
         answer=gen["answer"],
         citations=gen.get("citations", []),
-        debug=gen.get("debug", {}),
+        debug=debug_info,
     )
