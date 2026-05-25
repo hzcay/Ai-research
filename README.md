@@ -1,4 +1,4 @@
-# Enterprise-Grade RAG System (Research Assistant)
+# Research Assistant plaforms
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-00a393.svg)
 ![Qdrant](https://img.shields.io/badge/Qdrant-Vector_Database-ff5252.svg)
