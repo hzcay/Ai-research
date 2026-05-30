@@ -12,12 +12,38 @@ services:
       - ../.env
     environment:
       - QDRANT_URL=http://qdrant:6333
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ai_research
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/ai_research
       - REDIS_URL=redis://redis:6379/0
+      - MINIO_URL=http://minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=password
     depends_on:
       - qdrant
       - postgres
       - redis
+      - minio
+    restart: unless-stopped
+
+  worker:
+    container_name: research-assistant-rag-worker
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: arq src.worker.WorkerSettings
+    env_file:
+      - ../.env
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/ai_research
+      - REDIS_URL=redis://redis:6379/0
+      - MINIO_URL=http://minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=password
+    depends_on:
+      - qdrant
+      - postgres
+      - redis
+      - minio
     restart: unless-stopped
 
   qdrant:
@@ -49,7 +75,22 @@ services:
     ports:
       - "6379:6379"
     restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
     
 volumes:
   qdrant_storage:
   postgres_data:
+  minio_data:

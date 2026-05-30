@@ -8,10 +8,11 @@ from src.infrastructure.parsing.pdf_parser import PdfParser
 
 
 class IngestPdfsUseCase:
-    def __init__(self, parser: PdfParser, indexer: DocumentIndexer) -> None:
-        self._parser = parser
+    def __init__(self, indexer: DocumentIndexer) -> None:
         self._indexer = indexer
 
-    def execute(self, pdf_paths: List[Path]) -> None:
-        docs = self._parser.parse_batch(pdf_paths)
-        self._indexer.index(docs)
+    async def execute(self, pdf_paths: List[Path]) -> None:
+        for path in pdf_paths:
+            file_bytes = path.read_bytes()
+            filename = path.name
+            await self._indexer.ingest_pdf_bytes(file_bytes, filename)

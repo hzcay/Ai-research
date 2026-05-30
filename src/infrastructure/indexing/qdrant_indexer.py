@@ -112,7 +112,6 @@ class QdrantIndexer:
                 "filename": c.get("filename"),
                 "chunk_type": c.get("chunk_type"),
                 "token_estimate": c.get("token_estimate"),
-                "text": c.get("text"),
                 "related_table_ids": c.get("related_table_ids", []),
                 "related_chunk_ids": c.get("related_chunk_ids", []),
                 "metadata": c.get("metadata", {}),

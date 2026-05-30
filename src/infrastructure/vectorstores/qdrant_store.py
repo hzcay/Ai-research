@@ -47,14 +47,14 @@ class QdrantVectorStore(VectorStorePort):
         output: List[RetrievedChunk] = []
         for hit in hits:
             payload = getattr(hit, "payload", None) or {}
-            text = payload.get("text") or payload.get("content") or ""
             output.append(
                 RetrievedChunk(
                     id=str(getattr(hit, "id", "")),
+                    doc_id=payload.get("doc_id", ""),
                     score=getattr(hit, "score", None),
-                    text=text,
-                    metadata=payload.get("metadata", {}),
-                    payload=payload,
+                    text="", # Hydrated later by Redis/Postgres
+                    page_start=payload.get("page"),
+                    metadata=payload,
                 )
             )
         return output

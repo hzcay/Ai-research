@@ -6,8 +6,10 @@ from typing import Any, Dict
 
 @dataclass(slots=True)
 class RetrievedChunk:
-    id: str
+    id: str # chunk_id
+    doc_id: str
     score: float | None
     text: str
+    page_start: int | None = None
+    page_end: int | None = None
     metadata: Dict[str, Any] = field(default_factory=dict)
-    payload: Dict[str, Any] = field(default_factory=dict)

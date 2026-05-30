@@ -13,6 +13,9 @@ from src.infrastructure.parsing.pdf_parser import PdfParser
 from src.infrastructure.vectorstores.qdrant_store import QdrantVectorStore
 from src.application.ports.cache_port import SemanticCachePort
 from src.infrastructure.cache.qdrant_semantic_cache import QdrantSemanticCache
+from src.infrastructure.cache.redis_hot_cache import RedisHotCache
+from src.infrastructure.database.postgres_repository import PostgresRepository
+from src.infrastructure.storage.minio_storage import MinioStorage
 from src.infrastructure.indexing.task_tracker import TaskTracker
 from src.utils.metrics import GlobalMetricsTracker
 
@@ -55,8 +58,24 @@ def get_semantic_cache() -> SemanticCachePort:
 
 
 @lru_cache()
+def get_redis_hot_cache() -> RedisHotCache:
+    return RedisHotCache()
+
+@lru_cache()
+def get_postgres_repository() -> PostgresRepository:
+    return PostgresRepository()
+
+@lru_cache()
+def get_minio_storage() -> MinioStorage:
+    return MinioStorage()
+
+@lru_cache()
 def get_document_indexer() -> DocumentIndexer:
-    return DocumentIndexer(settings=get_settings())
+    return DocumentIndexer(
+        settings=get_settings(),
+        minio_storage=get_minio_storage(),
+        postgres_repo=get_postgres_repository()
+    )
 
 
 @lru_cache()
@@ -73,6 +92,8 @@ def get_retrieve_context_use_case() -> RetrieveContextUseCase:
     return RetrieveContextUseCase(
         embedder=embedder,
         vector_store=vector_store,
+        redis_cache=get_redis_hot_cache(),
+        postgres_repo=get_postgres_repository(),
         hybrid_enabled=settings.hybrid_enabled,
         alpha=settings.hybrid_alpha,
         beta=settings.hybrid_beta,
