@@ -14,10 +14,10 @@ from src.infrastructure.storage.minio_storage import MinioStorage
 from src.infrastructure.indexing.qdrant_indexer import QdrantIndexer
 from src.infrastructure.parsing.docling_parser import parse_research_paper
 from src.infrastructure.database.models import Chunk
-from src.utils.logger import setup_logging
+from src.utils.logger import setup_logger
 
 async def startup(ctx):
-    setup_logging()
+    setup_logger()
     logger.info("Starting Worker...")
     settings = get_settings()
     ctx['postgres'] = PostgresRepository()
@@ -133,6 +133,6 @@ async def process_document(ctx, job_id: str):
 class WorkerSettings:
     functions = [process_document]
     on_startup = startup
-    redis_settings = RedisSettings(host='localhost', port=6379, database=0)
+    redis_settings = RedisSettings.from_dsn(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
     max_tries = 3
     job_timeout = 3600

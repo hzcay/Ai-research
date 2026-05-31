@@ -13,9 +13,9 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     cache_ttl_seconds: int = 86400
 
-    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_research"
+    database_url: str = "postgresql+asyncpg://postgres:postgres@postgres:5432/ai_research"
     
-    minio_url: str = "localhost:9000"
+    minio_url: str = "minio:9000"
     minio_access_key: str = "admin"
     minio_secret_key: str = "password"
     minio_bucket: str = "ai-research"
