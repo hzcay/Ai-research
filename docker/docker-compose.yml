@@ -22,6 +22,8 @@ services:
       - postgres
       - redis
       - minio
+    volumes:
+      - hf_cache:/root/.cache/huggingface
     restart: unless-stopped
 
   worker:
@@ -44,6 +46,8 @@ services:
       - postgres
       - redis
       - minio
+    volumes:
+      - hf_cache:/root/.cache/huggingface
     restart: unless-stopped
 
   qdrant:
@@ -94,3 +98,4 @@ volumes:
   qdrant_storage:
   postgres_data:
   minio_data:
+  hf_cache:
