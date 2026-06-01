@@ -4,11 +4,13 @@ from src.infrastructure.config.settings import get_settings
 from src.infrastructure.database.models import Document, Chunk, IngestionJob
 from typing import List, Optional
 
+settings = get_settings()
+engine = create_async_engine(settings.database_url, echo=False)
+async_session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
 class PostgresRepository:
     def __init__(self):
-        settings = get_settings()
-        self.engine = create_async_engine(settings.database_url, echo=False)
-        self.async_session = async_sessionmaker(self.engine, expire_on_commit=False, class_=AsyncSession)
+        self.async_session = async_session_factory
         
     async def create_document(self, document: Document) -> Document:
         async with self.async_session() as session:

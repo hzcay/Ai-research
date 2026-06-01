@@ -119,13 +119,13 @@ async def main():
         
     logger.info(f"Sử dụng file PDF làm payload: {pdf_path.name}")
     
-    batches = [5, 10, 20, 30]
+    batches = [5, 10, 15, 20]
     
     for b in batches:
         await run_batch(b, pdf_path)
         if b != batches[-1]:
-            logger.info("Nghỉ ngơi 10s trước khi qua Batch tiếp theo cho server hạ nhiệt...\n")
-            await asyncio.sleep(10)
+            logger.info("Nghỉ ngơi 60s trước khi qua Batch tiếp theo cho server hạ nhiệt...\n")
+            await asyncio.sleep(60)
 
 if __name__ == "__main__":
     asyncio.run(main())
