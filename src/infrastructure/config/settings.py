@@ -6,11 +6,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    qdrant_url: str = "http://localhost:6333"
+    qdrant_url: str = "http://qdrant:6333"
     qdrant_collection: str = "research_chunks"
     embed_model_name: str = "BAAI/bge-m3"
 
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = "redis://redis:6379/0"
     cache_ttl_seconds: int = 86400
 
     database_url: str = "postgresql+asyncpg://postgres:postgres@postgres:5432/ai_research"

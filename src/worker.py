@@ -133,6 +133,6 @@ async def process_document(ctx, job_id: str):
 class WorkerSettings:
     functions = [process_document]
     on_startup = startup
-    redis_settings = RedisSettings.from_dsn(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+    redis_settings = RedisSettings.from_dsn(os.getenv("REDIS_URL", "redis://redis:6379/0"))
     max_tries = 3
     job_timeout = 3600

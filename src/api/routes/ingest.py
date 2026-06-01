@@ -15,8 +15,8 @@ from src.api.models import IngestUploadResponse
 router = APIRouter()
 
 async def get_redis_pool():
-
-    return await create_pool(RedisSettings(host='localhost', port=6379))
+    settings = get_settings()
+    return await create_pool(RedisSettings.from_dsn(settings.redis_url))
 
 @router.post("/upload", response_model=IngestUploadResponse)
 async def ingest_upload(
