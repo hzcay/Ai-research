@@ -1,0 +1,26 @@
+[
+  {
+    "user_input": "What is the main challenge with integrating multi-layer visual features in Multimodal LLMs?",
+    "reference": "The main challenge is that the integration of multi-layer visual features remains underexplored, particularly regarding optimal layer selection and fusion strategies. Existing methods often rely on arbitrary design choices, leading to suboptimal outcomes.",
+    "expected_contexts": [
+      "Multimodal Large Language Models (MLLMs) have made significant advancements in recent years, with visual features playing an increasingly critical role in enhancing model performance. However, the integration of multi-layer visual features in MLLMs remains underexplored, particularly with regard to optimal layer selection and fusion strategies. Existing methods often rely on arbitrary design choices, leading to suboptimal outcomes. In this paper, we systematically investigate two core aspects of multi-layer visual f"
+    ],
+    "source_page": 1
+  },
+  {
+    "user_input": "How does Similarity-based selection work for dividing visual layers?",
+    "reference": "Similarity-based selection divides visual layers into three groups (beginning, middle, and ending) based on the cosine similarity of visual features from different layers. Each group shares similar representations and information.",
+    "expected_contexts": [
+      "How can we select visual layers more effectively?\nTo address this question, we propose two criteria for dividing visual layers: Similarity-based and proportion-based selection.\nSimilarity-based selection is inspired by [41], where visual layers are divided into three groups (beginning, middle, and ending) based on the cosine similarity of visual features from different layers, with each group sharing similar representations and information."
+    ],
+    "source_page": 2
+  },
+  {
+    "user_input": "What are the two criteria proposed for dividing visual layers?",
+    "reference": "The two proposed criteria for dividing visual layers are Similarity-based selection and proportion-based selection.",
+    "expected_contexts": [
+      "This raises the research question:\nHow can we select visual layers more effectively?\nTo address this question, we propose two criteria for dividing visual layers: Similarity-based and proportion-based selection."
+    ],
+    "source_page": 2
+  }
+]

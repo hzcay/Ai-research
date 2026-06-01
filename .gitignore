@@ -1,7 +1,7 @@
 # .gitignore
 .env
 .venv/
-data/
+
 .pytest_cache/
 docker/ollama_data/
 cvpr_papers_by_topic/

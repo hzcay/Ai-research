@@ -34,7 +34,7 @@ def main():
     
     judge_llm = ChatGroq(
         api_key=settings.groq_api_key,
-        model_name="meta-llama/llama-4-scout-17b-16e-instruct",
+        model_name="llama-3.3-70b-versatile",
         max_retries=5
     )
     
@@ -43,14 +43,15 @@ def main():
     
     use_case = get_generate_answer_use_case()
     
-    dataset_path = Path("data/eval/ragas_smoke_test.json")
+    dataset_path = Path("data/eval/ragas_ground_truth.json")
     ground_truths = load_data(dataset_path)
     
     ragas_data = {
         "user_input": [],
         "response": [],
         "retrieved_contexts": [],
-        "reference": []
+        "reference": [],
+        "category": []
     }
     
     print("Generating responses for evaluation...")
@@ -65,6 +66,7 @@ def main():
         ragas_data["response"].append(result["answer"])
         ragas_data["retrieved_contexts"].append([c["text"] for c in result["citations"]])
         ragas_data["reference"].append(ref)
+        ragas_data["category"].append(gt.get("category", "unknown"))
         print(f"Processed query: {q}")
         
         time.sleep(2)
@@ -85,14 +87,27 @@ def main():
         raise_exceptions=False
     )
     
-    out_path = Path("data/eval/ragas_results.json")
+    out_path = Path("data/eval/ragas_benchmark_results.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     
+    df = score.to_pandas()
+    
     with open(out_path, "w") as f:
-        json.dump(score.to_pandas().to_dict(orient="records"), f, indent=2)
+        json.dump(df.to_dict(orient="records"), f, indent=2)
         
-    print("\n--- RAGAS SMOKE TEST RESULTS ---")
+    print("\n--- RAGAS BENCHMARK OVERALL RESULTS ---")
     print(score)
+    
+    if "category" in df.columns:
+        print("\n--- METRICS BY CATEGORY ---")
+        metrics = ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
+        grouped = df.groupby("category")[metrics].mean().round(4) * 100
+        
+        for metric in metrics:
+            print(f"\n# {metric.replace('_', ' ').title()}")
+            for cat, val in grouped[metric].items():
+                print(f"{cat.replace('_', ' ').title()}: {val:.2f}%")
+
     print(f"\nDetailed results saved to {out_path}")
 
 if __name__ == "__main__":
