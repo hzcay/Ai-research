@@ -9,6 +9,7 @@ from src.infrastructure.config.settings import get_settings
 from src.infrastructure.embeddings.bge_embedder import BgeEmbedder
 from src.infrastructure.indexing.document_indexer import DocumentIndexer
 from src.infrastructure.llm.groq_chat_model import GroqChatModel
+from src.infrastructure.llm.gemini_chat_model import GeminiChatModel
 from src.infrastructure.parsing.pdf_parser import PdfParser
 from src.infrastructure.vectorstores.qdrant_store import QdrantVectorStore
 from src.application.ports.cache_port import SemanticCachePort
@@ -106,13 +107,21 @@ def get_retrieve_context_use_case() -> RetrieveContextUseCase:
 @lru_cache()
 def get_generate_answer_use_case() -> GenerateAnswerUseCase:
     settings = get_settings()
-    llm = GroqChatModel(
-        api_key=settings.groq_api_key or "",
-        model_name=settings.groq_model,
-        model_name_2=settings.groq_model_2,
-        timeout_s=settings.groq_timeout_s,
-        retries=settings.groq_retries,
-    )
+    if settings.llm_provider.lower() == "gemini":
+        llm = GeminiChatModel(
+            api_key=settings.gemini_api_key or "",
+            model_name=settings.gemini_model,
+            timeout_s=settings.groq_timeout_s,
+            retries=settings.groq_retries,
+        )
+    else:
+        llm = GroqChatModel(
+            api_key=settings.groq_api_key or "",
+            model_name=settings.groq_model,
+            model_name_2=settings.groq_model_2,
+            timeout_s=settings.groq_timeout_s,
+            retries=settings.groq_retries,
+        )
     retrieve = get_retrieve_context_use_case()
     return GenerateAnswerUseCase(llm=llm, retrieve=retrieve)
 

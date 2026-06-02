@@ -20,11 +20,17 @@ class Settings(BaseSettings):
     minio_secret_key: str = "password"
     minio_bucket: str = "ai-research"
 
+    llm_provider: str = "groq"
+    
     groq_api_key: str | None = None
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "meta-llama/llama-4-scout-17b-16e-instruct"
     groq_model_2: str = "llama-3.1-8b-instant"
     groq_timeout_s: float = 30.0
     groq_retries: int = 2
+
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-3.1-flash-lite"
+    gemini_judge_model: str = "gemini-3.1-flash-lite"
 
     qdrant_timeout_s: float = 10.0
     qdrant_retries: int = 2
