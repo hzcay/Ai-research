@@ -31,6 +31,9 @@ class Chunk(Base):
     chunk_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     doc_id = Column(String, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     
+    parent_id = Column(String, nullable=True, index=True)
+    chunk_type = Column(String, default="child", nullable=False)
+    
     text_content = Column(Text, nullable=False)
     
     chunk_index = Column(Integer, nullable=False)

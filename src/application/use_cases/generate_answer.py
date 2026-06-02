@@ -29,7 +29,7 @@ class GenerateAnswerUseCase:
         self._llm = llm
         self._retrieve = retrieve
 
-    def execute(
+    async def execute(
         self,
         query: str,
         document_id: Optional[str] = None,
@@ -47,13 +47,13 @@ class GenerateAnswerUseCase:
         if not search_queries:
             search_queries = [query.strip()]
 
-        def gather(did: Optional[str]) -> tuple[List[RetrievedChunk], dict]:
+        async def gather(did: Optional[str]) -> tuple[List[RetrievedChunk], dict]:
             acc: List[RetrievedChunk] = []
             seen: set[str] = set()
             total_embed = 0.0
             total_retrieve = 0.0
             for s_query in search_queries:
-                c, m = self._retrieve.execute(s_query, top_k=top_k, document_id=did)
+                c, m = await self._retrieve.execute(s_query, top_k=top_k, document_id=did)
                 total_embed += m.get("embedding_ms", 0.0)
                 total_retrieve += m.get("retrieval_ms", 0.0)
                 for chunk in c:
@@ -62,18 +62,18 @@ class GenerateAnswerUseCase:
                         acc.append(chunk)
             return acc, {"embedding_ms": total_embed, "retrieval_ms": total_retrieve}
 
-        chunks, metrics = gather(document_id)
+        chunks, metrics = await gather(document_id)
         scope = "primary_document" if document_id else "corpus"
         
         if not chunks and document_id and auto_expand_corpus:
-            chunks, metrics = gather(None)
+            chunks, metrics = await gather(None)
             scope = "expanded_corpus"
 
         start_llm = time.perf_counter()
         result = self._answer_from_chunks(query, chunks, scope)
         
         if self._is_refusal(result["answer"]) and document_id and auto_expand_corpus:
-            chunks, metrics = gather(None)
+            chunks, metrics = await gather(None)
             start_llm_fallback = time.perf_counter()
             result = self._answer_from_chunks(query, chunks, "expanded_corpus")
             llm_ms = (time.perf_counter() - start_llm_fallback) * 1000

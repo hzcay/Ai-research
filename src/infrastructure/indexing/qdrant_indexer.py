@@ -41,8 +41,9 @@ class QdrantIndexer:
         *,
         min_tokens: int = 300,
         max_tokens: int = 800,
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-        all_chunks: List[Dict[str, Any]] = []
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+        all_parent_chunks: List[Dict[str, Any]] = []
+        all_child_chunks: List[Dict[str, Any]] = []
         reports: List[Dict[str, Any]] = []
 
         for i, doc in enumerate(docs, start=1):
@@ -54,35 +55,35 @@ class QdrantIndexer:
             if content_hash:
                 meta["content_hash"] = content_hash
 
-            content_chunks, table_chunks = chunk_markdown_with_tables(
+            parent_chunks, child_chunks = chunk_markdown_with_tables(
                 content,
                 doc_id=doc_id,
                 min_tokens=min_tokens,
                 max_tokens=max_tokens,
             )
-            for c in content_chunks:
+            for c in parent_chunks:
                 c["doc_id"] = doc_id
                 c["filename"] = filename
                 c["metadata"] = meta
                 if content_hash:
                     c["content_hash"] = content_hash
-            for t in table_chunks:
-                t["doc_id"] = doc_id
-                t["filename"] = filename
-                t["metadata"] = meta
+            for c in child_chunks:
+                c["doc_id"] = doc_id
+                c["filename"] = filename
+                c["metadata"] = meta
                 if content_hash:
-                    t["content_hash"] = content_hash
+                    c["content_hash"] = content_hash
 
-            report = test_chunk_sizes(content_chunks, min_tokens=min_tokens, max_tokens=max_tokens)
+            report = test_chunk_sizes(child_chunks, min_tokens=min_tokens, max_tokens=max_tokens)
             report["doc_id"] = doc_id
             report["filename"] = filename
-            report["content_chunks"] = len(content_chunks)
-            report["table_chunks"] = len(table_chunks)
+            report["parent_chunks"] = len(parent_chunks)
+            report["child_chunks"] = len(child_chunks)
             reports.append(report)
-            all_chunks.extend(content_chunks)
-            all_chunks.extend(table_chunks)
+            all_parent_chunks.extend(parent_chunks)
+            all_child_chunks.extend(child_chunks)
 
-        return all_chunks, reports
+        return all_parent_chunks, all_child_chunks, reports
 
     def upsert_chunks(self, chunks: List[Dict[str, Any]]) -> int:
         if not chunks:
@@ -107,13 +108,12 @@ class QdrantIndexer:
             point_id = int(hashlib.sha1(external_id.encode("utf-8")).hexdigest()[:16], 16)
             payload = {
                 "external_id": external_id,
+                "parent_id": c.get("parent_id"),
                 "doc_id": c.get("doc_id"),
                 "content_hash": c.get("content_hash"),
                 "filename": c.get("filename"),
                 "chunk_type": c.get("chunk_type"),
                 "token_estimate": c.get("token_estimate"),
-                "related_table_ids": c.get("related_table_ids", []),
-                "related_chunk_ids": c.get("related_chunk_ids", []),
                 "metadata": c.get("metadata", {}),
             }
             

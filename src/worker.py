@@ -4,6 +4,8 @@ import uuid
 import hashlib
 import tempfile
 from pathlib import Path
+from dotenv import load_dotenv
+import json
 from loguru import logger
 from arq import Worker
 from arq.connections import RedisSettings
@@ -15,6 +17,8 @@ from src.infrastructure.indexing.qdrant_indexer import QdrantIndexer
 from src.infrastructure.parsing.docling_parser import parse_research_paper
 from src.infrastructure.database.models import Chunk
 from src.utils.logger import setup_logger
+
+load_dotenv()
 
 async def startup(ctx):
     setup_logger()
@@ -92,28 +96,59 @@ async def process_document(ctx, job_id: str):
         }
         
         # 4. Chunking
-        chunks, _ = await asyncio.to_thread(qdrant.index_documents, [parsed_doc])
+        parent_chunks, child_chunks, _ = await asyncio.to_thread(qdrant.index_documents, [parsed_doc])
+        
+        stem = Path(doc.filename).stem
+        debug_dir = Path("data/debug") / stem
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        
+        raw_path = debug_dir / "raw_content.md"
+        raw_path.write_text(str(parsed.get("raw_content", "")), encoding="utf-8")
+        
+        proc_path = debug_dir / "cleaned_content.md"
+        proc_path.write_text(str(parsed.get("content", "")), encoding="utf-8")
+
+        audit_path = debug_dir / "chunks_audit.json"
+        audit_path.write_text(json.dumps({
+            "parent_chunks": parent_chunks,
+            "child_chunks": child_chunks
+        }, indent=2, default=str), encoding="utf-8")
         
         # 5. Insert Chunks to Postgres
         db_chunks = []
-        for i, c in enumerate(chunks):
-            chunk_id = str(uuid.uuid4())
-            c["chunk_id"] = chunk_id
+        for i, p in enumerate(parent_chunks):
             db_chunks.append(Chunk(
-                chunk_id=chunk_id,
+                chunk_id=p["chunk_id"],
+                parent_id=p["parent_id"],
+                chunk_type="parent",
+                doc_id=doc.id,
+                text_content=str(p.get("text", "")),
+                chunk_index=i,
+                page_start=p.get("page_start", None),
+                page_end=p.get("page_end", None),
+                token_count=p.get("token_estimate", 0),
+                content_hash=content_hash,
+                embedding_status="completed"
+            ))
+            
+        for i, c in enumerate(child_chunks):
+            db_chunks.append(Chunk(
+                chunk_id=c["chunk_id"],
+                parent_id=c["parent_id"],
+                chunk_type="child",
                 doc_id=doc.id,
                 text_content=str(c.get("text", "")),
                 chunk_index=i,
-                page_start=c.get("metadata", {}).get("page_start", None),
-                page_end=c.get("metadata", {}).get("page_end", None),
+                page_start=c.get("page_start", None),
+                page_end=c.get("page_end", None),
                 token_count=c.get("token_estimate", 0),
                 content_hash=content_hash,
                 embedding_status="completed"
             ))
         await postgres.create_chunks(db_chunks)
         
-        # 6. Upsert Vectors to Qdrant
-        await asyncio.to_thread(qdrant.upsert_chunks, chunks)
+        # 6. Upsert Vectors to Qdrant (ONLY child chunks)
+        await asyncio.to_thread(qdrant.upsert_chunks, child_chunks)
         
         # 7. Completed
         job.status = 'completed'

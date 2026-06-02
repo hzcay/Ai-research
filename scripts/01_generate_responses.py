@@ -1,5 +1,6 @@
 import json
 import time
+import asyncio
 from pathlib import Path
 from tqdm import tqdm
 
@@ -10,7 +11,7 @@ def load_data(filepath):
     with open(filepath, "r") as f:
         return json.load(f)
 
-def main():
+async def main():
     settings = get_settings()
     use_case = get_generate_answer_use_case()
     
@@ -30,7 +31,7 @@ def main():
         q = gt["user_input"]
         ref = gt["reference"]
     
-        result = use_case.execute(query=q, top_k=2) 
+        result = await use_case.execute(query=q, top_k=2) 
         
         ragas_data["user_input"].append(q)
         ragas_data["response"].append(result["answer"])
@@ -51,4 +52,4 @@ def main():
     print("Next step: Run 02_evaluate_responses.py to evaluate these responses.")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

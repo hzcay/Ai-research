@@ -9,11 +9,52 @@ from docling.document_converter import DocumentConverter
 import threading
 
 from src.infrastructure.parsing.parsed_writer import save_parsed
+from src.utils.logger import logger
 
 MAX_SANE_TITLE_LEN = 200
 MIN_SANE_ABSTRACT_LEN = 80
 _QUOTE_CHARS = set('""\u2018\u2019\u201C\u201D\u00AB\u00BB\u2039\u203A')
 _ARXIV_LINE_RE = re.compile(r"arXiv:\d|^\[?\w{2,4}\.\w{2,4}\]?$|\bdoi\b", re.IGNORECASE)
+
+def clean_markdown_text(markdown: str) -> str:
+    """Loại bỏ Watermark rác và phần References ở cuối bài báo."""
+    text = markdown
+    before_len = len(text)
+    
+    watermark_patterns = [
+        r"This CVPR paper is the Open Access version, provided by the Computer Vision Foundation.{0,1000}?available on IEEE Xplore\.",
+        r"This ICCV paper is the Open Access version.{0,1000}?available on IEEE Xplore\.",
+        r"Authorized licensed use limited to:.{0,1000}?\.",
+        r"IEEE Transactions on Pattern Analysis and Machine Intelligence.{0,100}?\d{4}"
+    ]
+    for p in watermark_patterns:
+        text = re.sub(p, "", text, flags=re.IGNORECASE | re.DOTALL)
+    
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    
+    ref_patterns = [
+        r"(?:\n#+\s+References\s*\n)",
+        r"(?:\n#+\s+REFERENCES\s*\n)",
+        r"(?:\n#+\s+Tài liệu tham khảo\s*\n)",
+        r"(?:\n#+\s+Bibliography\s*\n)",
+        r"(?:\n#+\s+BIBLIOGRAPHY\s*\n)",
+        r"(?:\n#+\s+References and Acknowledgements\s*\n)"
+    ]
+    
+    # Header markdown "## References" is very safe to match, we can start from 50% of document
+    search_start = int(len(text) * 0.5)
+    for p in ref_patterns:
+        match = re.search(p, text[search_start:])
+        if match:
+            text = text[:search_start + match.start()]
+            break
+            
+    final_text = text.strip()
+    removed = before_len - len(final_text)
+    if removed > 0:
+        logger.info(f"Removed {removed} chars of boilerplate/references")
+        
+    return final_text
 
 
 def _collapse_ws(text: str) -> str:
@@ -264,6 +305,8 @@ def _parse_with_docling(pdf_path: Path) -> Dict[str, Any]:
     with fitz.open(pdf_path) as fdoc:
         total_pages = fdoc.page_count
 
+    cleaned_markdown = clean_markdown_text(markdown)
+
     return {
         "filename": pdf_path.name,
         "source": "docling",
@@ -274,7 +317,8 @@ def _parse_with_docling(pdf_path: Path) -> Dict[str, Any]:
             "has_tables": "|" in markdown and "---" in markdown,
         },
         "total_pages": total_pages,
-        "content": markdown,
+        "raw_content": markdown,
+        "content": cleaned_markdown,
     }
 
 
@@ -286,6 +330,8 @@ def _parse_with_pymupdf(pdf_path: Path) -> Dict[str, Any]:
         full_text = "\n\n".join(pages_text)
         abstract = _extract_abstract(full_text)
 
+    cleaned_text = clean_markdown_text(full_text)
+
     return {
         "filename": pdf_path.name,
         "source": "pymupdf",
@@ -296,7 +342,8 @@ def _parse_with_pymupdf(pdf_path: Path) -> Dict[str, Any]:
             "has_tables": False,
         },
         "total_pages": len(pages_text),
-        "content": full_text,
+        "raw_content": full_text,
+        "content": cleaned_text,
     }
 
 

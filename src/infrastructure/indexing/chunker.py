@@ -2,172 +2,82 @@ from __future__ import annotations
 
 import hashlib
 import re
+import uuid
 from typing import Any, Dict, List, Tuple
-
-
-def _strip_frontmatter(markdown_text: str) -> str:
-    if not markdown_text.startswith("---"):
-        return markdown_text
-    m = re.match(r"^---\n.*?\n---\n", markdown_text, flags=re.DOTALL)
-    if m:
-        return markdown_text[m.end() :]
-    return markdown_text
-
-
-def _is_table_line(line: str) -> bool:
-    s = line.strip()
-    return s.startswith("|") and s.endswith("|")
-
-
-def _extract_blocks_with_tables(markdown_text: str) -> List[Dict[str, Any]]:
-    body = _strip_frontmatter(markdown_text)
-    lines = body.splitlines()
-    blocks: List[Dict[str, Any]] = []
-
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        if not line.strip():
-            i += 1
-            continue
-
-        if _is_table_line(line):
-            tbl_lines = [line.strip()]
-            i += 1
-            while i < len(lines) and _is_table_line(lines[i]):
-                tbl_lines.append(lines[i].strip())
-                i += 1
-            blocks.append({"kind": "table", "text": "\n".join(tbl_lines)})
-            continue
-
-        para_lines = [line.rstrip()]
-        i += 1
-        while i < len(lines) and lines[i].strip() and not _is_table_line(lines[i]):
-            para_lines.append(lines[i].rstrip())
-            i += 1
-        blocks.append({"kind": "paragraph", "text": "\n".join(para_lines).strip()})
-
-    for idx, b in enumerate(blocks, start=1):
-        b["block_idx"] = idx
-    return blocks
-
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 def _estimate_tokens(text: str) -> int:
     words = len(re.findall(r"\S+", text))
     return max(1, int(words * 1.3))
 
-
-def _split_oversized_paragraph(paragraph: str, max_tokens: int) -> List[str]:
-    if _estimate_tokens(paragraph) <= max_tokens:
-        return [paragraph]
-
-    sentences = re.split(r"(?<=[\.\!\?])\s+", paragraph)
-    out: List[str] = []
-    current: List[str] = []
-    for sent in sentences:
-        sent = sent.strip()
-        if not sent:
-            continue
-        candidate = " ".join(current + [sent]).strip()
-        if current and _estimate_tokens(candidate) > max_tokens:
-            out.append(" ".join(current).strip())
-            current = [sent]
-        else:
-            current.append(sent)
-    if current:
-        out.append(" ".join(current).strip())
-    return out
-
-
-def _build_chunk_id(doc_id: str, idx: int) -> str:
-    return f"{doc_id}:chunk:{idx:04d}"
-
-
-def _build_table_id(doc_id: str, idx: int) -> str:
-    return f"{doc_id}:table:{idx:04d}"
-
+def build_doc_id(filename: str) -> str:
+    return hashlib.sha1(filename.encode("utf-8")).hexdigest()[:12]
 
 def chunk_markdown_with_tables(
     markdown_text: str,
     doc_id: str,
-    min_tokens: int = 300,
-    max_tokens: int = 800,
+    min_tokens: int = 300, # Legacy param, not strictly used for max thresholds now
+    max_tokens: int = 800, # Legacy param
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    if min_tokens <= 0 or max_tokens < min_tokens:
-        raise ValueError("Invalid token range.")
-
-    blocks = _extract_blocks_with_tables(markdown_text)
-    paragraph_units: List[Dict[str, Any]] = []
-    table_chunks: List[Dict[str, Any]] = []
-
-    for b in blocks:
-        if b["kind"] == "table":
-            text = b["text"].strip()
-            table_chunks.append(
-                {
-                    "table_id": _build_table_id(doc_id, len(table_chunks) + 1),
-                    "chunk_type": "table",
-                    "text": text,
-                    "token_estimate": _estimate_tokens(text),
-                    "block_idx": b["block_idx"],
-                    "related_chunk_ids": [],
-                }
-            )
-        else:
-            for part in _split_oversized_paragraph(b["text"], max_tokens=max_tokens):
-                paragraph_units.append({"text": part, "block_idx": b["block_idx"]})
-
-    content_chunks: List[Dict[str, Any]] = []
-    buf_texts: List[str] = []
-    buf_blocks: List[int] = []
-    for p in paragraph_units:
-        candidate = "\n\n".join(buf_texts + [p["text"]]).strip()
-        if buf_texts and _estimate_tokens(candidate) > max_tokens:
-            text = "\n\n".join(buf_texts).strip()
-            content_chunks.append(
-                {
-                    "chunk_id": _build_chunk_id(doc_id, len(content_chunks) + 1),
-                    "chunk_type": "content",
-                    "text": text,
-                    "token_estimate": _estimate_tokens(text),
-                    "related_table_ids": [],
-                    "_block_indices": sorted(set(buf_blocks)),
-                }
-            )
-            buf_texts = [p["text"]]
-            buf_blocks = [p["block_idx"]]
-        else:
-            buf_texts.append(p["text"])
-            buf_blocks.append(p["block_idx"])
-
-    if buf_texts:
-        text = "\n\n".join(buf_texts).strip()
-        content_chunks.append(
-            {
-                "chunk_id": _build_chunk_id(doc_id, len(content_chunks) + 1),
-                "chunk_type": "content",
-                "text": text,
-                "token_estimate": _estimate_tokens(text),
-                "related_table_ids": [],
-                "_block_indices": sorted(set(buf_blocks)),
-            }
-        )
-
-    for t in table_chunks:
-        if not content_chunks:
-            break
-        nearest = min(
-            content_chunks,
-            key=lambda c: min(abs(t["block_idx"] - bi) for bi in c["_block_indices"]),
-        )
-        nearest["related_table_ids"].append(t["table_id"])
-        t["related_chunk_ids"].append(nearest["chunk_id"])
-
-    for c in content_chunks:
-        c.pop("_block_indices", None)
-    for t in table_chunks:
-        t.pop("block_idx", None)
-    return content_chunks, table_chunks
+    """
+    Revised Parent-Child Chunker using Langchain's RecursiveCharacterTextSplitter.
+    Returns: (parent_chunks, child_chunks)
+    Note: table_chunks are merged or handled via the recursive splitter natively.
+    """
+    
+    # 1. Create Splitters
+    parent_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=2000 * 4, # Approx 4 chars per token -> 8000 chars
+        chunk_overlap=200 * 4,
+        length_function=len,
+        separators=["\n\n## ", "\n\n### ", "\n\n", "\n", ".", " "]
+    )
+    
+    child_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=400 * 4, # Approx 4 chars per token -> 1600 chars
+        chunk_overlap=60 * 4, # 15% overlap
+        length_function=len,
+        separators=["\n\n", "\n", ".", " "]
+    )
+    
+    # 2. Split into Parent Chunks
+    parent_texts = parent_splitter.split_text(markdown_text)
+    
+    parent_chunks: List[Dict[str, Any]] = []
+    child_chunks: List[Dict[str, Any]] = []
+    
+    for p_idx, p_text in enumerate(parent_texts):
+        parent_id = str(uuid.uuid4())
+        
+        parent_chunks.append({
+            "chunk_id": parent_id,
+            "parent_id": parent_id, # Self reference for parent
+            "chunk_type": "parent",
+            "doc_id": doc_id,
+            "text": p_text.strip(),
+            "token_estimate": _estimate_tokens(p_text),
+            "page_start": None, # Could extract if we map from PyMuPDF
+            "page_end": None,
+            "section": None # Could extract using Regex on headers
+        })
+        
+        # 3. Split Parent into Child Chunks
+        c_texts = child_splitter.split_text(p_text)
+        for c_idx, c_text in enumerate(c_texts):
+            child_id = str(uuid.uuid4())
+            child_chunks.append({
+                "chunk_id": child_id,
+                "parent_id": parent_id,
+                "chunk_type": "child",
+                "doc_id": doc_id,
+                "text": c_text.strip(),
+                "token_estimate": _estimate_tokens(c_text),
+                "page_start": None,
+                "page_end": None,
+                "section": None
+            })
+            
+    return parent_chunks, child_chunks
 
 
 def test_chunk_sizes(
@@ -199,6 +109,3 @@ def test_chunk_sizes(
         "avg_size": round(sum(sizes) / len(sizes), 2),
     }
 
-
-def build_doc_id(filename: str) -> str:
-    return hashlib.sha1(filename.encode("utf-8")).hexdigest()[:12]

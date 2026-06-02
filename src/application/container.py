@@ -128,6 +128,5 @@ def get_generate_answer_use_case() -> GenerateAnswerUseCase:
 
 @lru_cache()
 def get_ingest_pdfs_use_case() -> IngestPdfsUseCase:
-    parser = PdfParser()
-    return IngestPdfsUseCase(parser=parser, indexer=get_document_indexer())
+    return IngestPdfsUseCase(indexer=get_document_indexer())
     

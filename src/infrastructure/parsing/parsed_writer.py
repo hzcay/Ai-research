@@ -28,22 +28,21 @@ def build_frontmatter(result: Dict[str, Any]) -> str:
 
 def save_parsed(result: Dict[str, Any], data_dir: Path, pdf_path: Path) -> Tuple[Path, Path]:
     stem = Path(result.get("filename", "unknown")).stem
-    raw_dir = data_dir / "raw_texts"
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    raw_path = raw_dir / f"{stem}.md"
-
+    debug_dir = data_dir / "debug" / stem
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    
     pages: List[str] = []
     with fitz.open(pdf_path) as doc:
         for idx in range(doc.page_count):
             text = doc.load_page(idx).get_text("text").strip()
             pages.append(f"<!-- page {idx + 1} -->\n\n{text}")
+            
+    raw_path = debug_dir / "raw_content.md"
     raw_path.write_text(
         f"<!-- raw text: {result.get('filename')} -->\n\n" + "\n\n---\n\n".join(pages),
         encoding="utf-8",
     )
 
-    proc_dir = data_dir / "processed"
-    proc_dir.mkdir(parents=True, exist_ok=True)
-    proc_path = proc_dir / f"{stem}.md"
+    proc_path = debug_dir / "cleaned_content.md"
     proc_path.write_text(build_frontmatter(result) + str(result.get("content", "")), encoding="utf-8")
     return raw_path, proc_path

@@ -43,8 +43,8 @@ class DocumentIndexer:
         )
 
     def index(self, docs: List[Dict[str, Any]]) -> None:
-        chunks, _ = self._indexer.index_documents(docs)
-        self._indexer.upsert_chunks(chunks)
+        parent_chunks, child_chunks, _ = self._indexer.index_documents(docs)
+        self._indexer.upsert_chunks(child_chunks)
 
     async def ingest_pdf_bytes(
         self,
@@ -56,13 +56,9 @@ class DocumentIndexer:
         """Async Ingestion Pipeline: MinIO -> Postgres -> Qdrant"""
         content_hash = hashlib.sha256(file_bytes).hexdigest()
         
-        # 1. Check duplicate locally via Postgres (to avoid expensive Qdrant call if possible) or just force it
-        # For simplicity, we just proceed. Duplicate check can be added later.
-        
         doc_id = str(uuid.uuid4())
         safe = _safe_filename(filename)
         
-        # 2. Upload to MinIO
         object_name = f"raw/{content_hash[:16]}_{safe}"
         try:
             await asyncio.to_thread(self._minio.upload_bytes, object_name, file_bytes)
@@ -70,8 +66,7 @@ class DocumentIndexer:
         except Exception as e:
             logger.error(f"Failed to upload {filename} to MinIO: {e}")
             raise
-            
-        # 3. Create Document DB Record (status=processing)
+
         doc_record = Document(
             id=doc_id,
             filename=safe,
@@ -79,8 +74,7 @@ class DocumentIndexer:
             status="processing"
         )
         await self._postgres.create_document(doc_record)
-        
-        # 4. Parsing (in temp file)
+
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                 tmp.write(file_bytes)
@@ -101,34 +95,64 @@ class DocumentIndexer:
                 "doc_id": doc_id,
             }
             
-            # 5. Chunking & Indexing
-            chunks, _ = await asyncio.to_thread(self._indexer.index_documents, [doc])
+            parent_chunks, child_chunks, _ = await asyncio.to_thread(self._indexer.index_documents, [doc])
             
-            # 6. Insert Chunks to Postgres
+            stem = Path(filename).stem
+            debug_dir = Path("data/debug") / stem
+            debug_dir.mkdir(parents=True, exist_ok=True)
+            
+            raw_path = debug_dir / "raw_content.md"
+            raw_path.write_text(str(parsed.get("raw_content", "")), encoding="utf-8")
+            
+            proc_path = debug_dir / "cleaned_content.md"
+            proc_path.write_text(str(parsed.get("content", "")), encoding="utf-8")
+            
+            import json
+            audit_path = debug_dir / "chunks_audit.json"
+            audit_data = {
+                "parent_chunks": parent_chunks,
+                "child_chunks": child_chunks
+            }
+            audit_path.write_text(json.dumps(audit_data, indent=2, default=str), encoding="utf-8")
+            
             db_chunks = []
-            for i, c in enumerate(chunks):
-                chunk_id = str(uuid.uuid4())
-                c["chunk_id"] = chunk_id # assign back for Qdrant payload
+            
+            for i, p in enumerate(parent_chunks):
                 db_chunks.append(Chunk(
-                    chunk_id=chunk_id,
+                    chunk_id=p["chunk_id"],
+                    parent_id=p["parent_id"],
+                    chunk_type="parent",
+                    doc_id=doc_id,
+                    text_content=str(p.get("text", "")),
+                    chunk_index=i,
+                    page_start=p.get("page_start", None),
+                    page_end=p.get("page_end", None),
+                    token_count=p.get("token_estimate", 0),
+                    content_hash=content_hash,
+                    embedding_status="completed"
+                ))
+                
+            for i, c in enumerate(child_chunks):
+                db_chunks.append(Chunk(
+                    chunk_id=c["chunk_id"],
+                    parent_id=c["parent_id"],
+                    chunk_type="child",
                     doc_id=doc_id,
                     text_content=str(c.get("text", "")),
                     chunk_index=i,
-                    page_start=c.get("metadata", {}).get("page_start", None),
-                    page_end=c.get("metadata", {}).get("page_end", None),
+                    page_start=c.get("page_start", None),
+                    page_end=c.get("page_end", None),
                     token_count=c.get("token_estimate", 0),
                     content_hash=content_hash,
                     embedding_status="completed"
                 ))
+            
             await self._postgres.create_chunks(db_chunks)
             
-            # 7. Upsert vectors to Qdrant
-            n = await asyncio.to_thread(self._indexer.upsert_chunks, chunks)
+            n = await asyncio.to_thread(self._indexer.upsert_chunks, child_chunks)
             
-            # 8. Mark document as completed
-            # Note: Add update_document_status to postgres_repo if not exists.
             doc_record.status = "completed"
-            await self._postgres.update_document(doc_record) # Requires adding this method
+            await self._postgres.update_document(doc_record) 
             
             return {
                 "status": "indexed",

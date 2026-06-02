@@ -21,7 +21,7 @@ async def chat(req: ChatRequest, settings=Depends(get_settings_dep)) -> ChatResp
 
     generate_use_case = get_generate_answer_use_case()
 
-    gen = generate_use_case.execute(
+    gen = await generate_use_case.execute(
         req.query,
         document_id=req.document_id,
         auto_expand_corpus=req.auto_expand_corpus,
