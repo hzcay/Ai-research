@@ -211,7 +211,3 @@ streamlit run app.py
 ```
 
 Open `http://localhost:8501` in your browser. Upload a research paper and start querying!
-
-```bash
-pytest
-```

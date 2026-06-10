@@ -47,9 +47,7 @@ class QdrantVectorStore(VectorStorePort):
         output: List[RetrievedChunk] = []
         for hit in hits:
             payload = getattr(hit, "payload", None) or {}
-            # CRITICAL FIX: The point ID in Qdrant is an integer hash, but the real chunk UUID 
-            # stored in Postgres is inside the payload under 'external_id'. 
-            # We MUST use external_id so Postgres can hydrate the text payload!
+            
             real_chunk_id = payload.get("external_id") or str(getattr(hit, "id", ""))
             
             output.append(
@@ -57,7 +55,7 @@ class QdrantVectorStore(VectorStorePort):
                     id=real_chunk_id,
                     doc_id=payload.get("doc_id", ""),
                     score=getattr(hit, "score", None),
-                    text="", # Hydrated later by Redis/Postgres
+                    text="", 
                     page_start=payload.get("page"),
                     metadata=payload,
                 )
