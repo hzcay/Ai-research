@@ -135,9 +135,17 @@ Stress testing beyond 10 concurrent uploads was intentionally avoided due to the
 
 ## System Architecture
 
-![Flow Diagram](photo/uml/flow_diagram.png)
+### 1. High Level Architecture
+![High Level Architecture](photo/uml/High_Level_Architecture.png)
 
-![Flow Mini-Diagram](photo/uml/flow_mini_diagram.png)
+### 2. Clean Architecture
+![Clean Architecture](photo/uml/Clean_Architecture.png)
+
+### 3. Document Ingestion Flow
+![Document Ingestion Flow](photo/uml/Document_Ingestion_Flow.png)
+
+### 4. Retrieval Flow
+![Retrieval Flow](photo/uml/Retrieval_Flow.png)
 
 ```text
 src/

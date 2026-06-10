@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     hybrid_beta: float = 0.3
     lexical_candidate_limit: int = 1000
 
-    rerank_enabled: bool = True
+    rerank_enabled: bool = False
     rerank_top_n: int = 20
     rerank_final_k: int = 5
 

@@ -19,6 +19,9 @@ from src.infrastructure.database.postgres_repository import PostgresRepository
 from src.infrastructure.storage.minio_storage import MinioStorage
 from src.infrastructure.indexing.task_tracker import TaskTracker
 from src.utils.metrics import GlobalMetricsTracker
+from src.application.ports.reranker_port import RerankerPort
+from src.infrastructure.embeddings.noop_reranker import NoOpReranker
+from src.infrastructure.embeddings.bge_reranker import BgeReranker
 
 @lru_cache()
 def get_global_metrics() -> GlobalMetricsTracker:
@@ -80,6 +83,15 @@ def get_document_indexer() -> DocumentIndexer:
 
 
 @lru_cache()
+def get_reranker() -> RerankerPort:
+    settings = get_settings()
+    if settings.rerank_enabled:
+        return BgeReranker()
+    else:
+        return NoOpReranker()
+
+
+@lru_cache()
 def get_retrieve_context_use_case() -> RetrieveContextUseCase:
     settings = get_settings()
     embedder = get_embedder()
@@ -98,6 +110,7 @@ def get_retrieve_context_use_case() -> RetrieveContextUseCase:
         hybrid_enabled=settings.hybrid_enabled,
         alpha=settings.hybrid_alpha,
         beta=settings.hybrid_beta,
+        reranker=get_reranker(),
         rerank_enabled=settings.rerank_enabled,
         rerank_top_n=settings.rerank_top_n,
         rerank_final_k=settings.rerank_final_k,
@@ -123,7 +136,12 @@ def get_generate_answer_use_case() -> GenerateAnswerUseCase:
             retries=settings.groq_retries,
         )
     retrieve = get_retrieve_context_use_case()
-    return GenerateAnswerUseCase(llm=llm, retrieve=retrieve)
+    return GenerateAnswerUseCase(
+        llm=llm, 
+        retrieve=retrieve,
+        embedder=get_embedder(),
+        semantic_cache=get_semantic_cache()
+    )
 
 
 @lru_cache()

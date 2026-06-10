@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from src.application.ports.embedder_port import EmbedderPort
 from src.application.ports.vector_store_port import VectorStorePort
+from src.application.ports.reranker_port import RerankerPort
 from src.domain.entities.retrieval import RetrievedChunk
 from src.infrastructure.cache.redis_hot_cache import RedisHotCache
 from src.infrastructure.database.postgres_repository import PostgresRepository
@@ -20,12 +21,17 @@ class RetrieveContextUseCase:
         vector_store: VectorStorePort,
         redis_cache: RedisHotCache,
         postgres_repo: PostgresRepository,
+        reranker: Optional[RerankerPort] = None,
         **kwargs
     ) -> None:
         self._embedder = embedder
         self._vector_store = vector_store
         self._redis_cache = redis_cache
         self._postgres_repo = postgres_repo
+        self._reranker = reranker
+        self._rerank_enabled = kwargs.get("rerank_enabled", False)
+        self._rerank_top_n = kwargs.get("rerank_top_n", 20)
+        self._rerank_final_k = kwargs.get("rerank_final_k", 5)
 
     async def execute(
         self,
@@ -40,9 +46,13 @@ class RetrieveContextUseCase:
         embedding_ms = (time.perf_counter() - start_embed) * 1000
         
         start_retrieval = time.perf_counter()
+        
+        # Determine actual top_k for vector search
+        actual_top_k = self._rerank_top_n if (self._rerank_enabled and self._reranker) else top_k
+        
         out = self._vector_store.search(
             query_vectors=query_vectors,
-            top_k=top_k,
+            top_k=actual_top_k,
             document_id=document_id,
         )
         
@@ -69,21 +79,11 @@ class RetrieveContextUseCase:
                 
         
         parent_out = []
-        total_tokens = 0
-        MAX_CONTEXT_TOKENS = 6000 
-        
         for pid in parent_ids:
             text = cached_texts.get(pid, "")
             if not text:
                 continue
                 
-
-            est_tokens = len(text.split()) * 1.3
-            if total_tokens + est_tokens > MAX_CONTEXT_TOKENS:
-                break
-                
-            total_tokens += est_tokens
-            
             best_score = max([c.score for c in out if c.metadata.get("parent_id") == pid or c.id == pid] + [0.0])
             
             parent_out.append(
@@ -97,7 +97,40 @@ class RetrieveContextUseCase:
                 )
             )
             
-        out = parent_out
+        rerank_ms = 0.0
+        # Optional Two-Stage Retrieval (Reranking)
+        if self._rerank_enabled and self._reranker and parent_out:
+            start_rerank = time.perf_counter()
+            texts = [c.text for c in parent_out]
+            try:
+                scores = self._reranker.rerank(query, texts)
+                for c, s in zip(parent_out, scores):
+                    c.score = s
+                # Sắp xếp lại theo điểm rerank giảm dần
+                parent_out.sort(key=lambda x: x.score, reverse=True)
+                parent_out = parent_out[:self._rerank_final_k]
+            except Exception as e:
+                logger.error(f"Reranking failed: {e}")
+                # Fallback: không rerank nữa, cắt về top_k ban đầu
+                parent_out = parent_out[:top_k]
+                
+            rerank_ms = (time.perf_counter() - start_rerank) * 1000
+        else:
+            # Nếu không rerank, cắt về top_k theo kết quả Vector Store
+            parent_out = parent_out[:top_k]
+
+        # Áp dụng giới hạn Token Context
+        final_out = []
+        total_tokens = 0
+        MAX_CONTEXT_TOKENS = 6000 
+        for c in parent_out:
+            est_tokens = len(c.text.split()) * 1.3
+            if total_tokens + est_tokens > MAX_CONTEXT_TOKENS:
+                break
+            total_tokens += est_tokens
+            final_out.append(c)
+            
+        out = final_out
         
         retrieval_ms = (time.perf_counter() - start_retrieval) * 1000
 
@@ -107,7 +140,8 @@ class RetrieveContextUseCase:
         
         metrics = {
             "embedding_ms": embedding_ms,
-            "retrieval_ms": retrieval_ms
+            "retrieval_ms": retrieval_ms,
+            "rerank_ms": rerank_ms
         }
         
         try:

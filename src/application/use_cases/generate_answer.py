@@ -4,8 +4,13 @@ import time
 from typing import Any, Dict, List, Optional
 
 from src.application.ports.llm_port import LlmPort
+from src.application.ports.embedder_port import EmbedderPort
+from src.application.ports.cache_port import SemanticCachePort
 from src.application.use_cases.retrieve_context import RetrieveContextUseCase
 from src.domain.entities.retrieval import RetrievedChunk
+
+import logging
+
 
 SYSTEM_INSTRUCTION = """You are an Expert Academic Research Assistant.
 Your task is to answer questions strictly based on the provided Context.
@@ -25,9 +30,13 @@ class GenerateAnswerUseCase:
         self,
         llm: LlmPort,
         retrieve: RetrieveContextUseCase,
+        embedder: Optional[EmbedderPort] = None,
+        semantic_cache: Optional[SemanticCachePort] = None,
     ) -> None:
         self._llm = llm
         self._retrieve = retrieve
+        self._embedder = embedder
+        self._semantic_cache = semantic_cache
 
     async def execute(
         self,
@@ -39,6 +48,37 @@ class GenerateAnswerUseCase:
     ) -> Dict[str, Any]:
         start_total = time.perf_counter()
         
+        tenant_id = document_id or "corpus"
+        query_vector = []
+        if self._semantic_cache and self._embedder:
+            try:
+                embed_res = self._embedder.encode_query(query)
+                query_vector = embed_res.get("dense", [])
+                if query_vector:
+                    cached = await self._semantic_cache.get(
+                        query=query, 
+                        query_vector=query_vector, 
+                        tenant_id=tenant_id
+                    )
+                    if cached:
+                        total_ms = (time.perf_counter() - start_total) * 1000
+                        return {
+                            "answer": cached["answer"],
+                            "citations": cached.get("sources", []),
+                            "retrieval_scope": "semantic_cache",
+                            "debug": {
+                                "retrieval_mode": "cache_hit",
+                                "cache_hit": True,
+                                "embedding_ms": 0.0,
+                                "retrieval_ms": 0.0,
+                                "llm_ms": 0.0,
+                                "total_ms": round(total_ms, 2),
+                                "top_k": 0
+                            }
+                        }
+            except Exception as e:
+                logging.getLogger(__name__).warning(f"Semantic Cache Get failed: {e}")
+
         search_queries = [
             s.strip()
             for s in self._llm.multi_query_rewrite(original_query=query)
@@ -91,6 +131,19 @@ class GenerateAnswerUseCase:
             "total_ms": round(total_ms, 2),
             "top_k": len(chunks)
         }
+        
+        if self._semantic_cache and query_vector and not self._is_refusal(result["answer"]):
+            try:
+                await self._semantic_cache.set(
+                    query=query,
+                    query_vector=query_vector,
+                    answer=result["answer"],
+                    sources=result.get("citations", []),
+                    tenant_id=tenant_id,
+                    metadata={"scope": scope}
+                )
+            except Exception as e:
+                logging.getLogger(__name__).warning(f"Semantic Cache Set failed: {e}")
         
         return result
 
