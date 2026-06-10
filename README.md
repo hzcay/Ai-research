@@ -1,12 +1,14 @@
-# Research Assistant plaforms
+# Research Assistant Platform
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-00a393.svg)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791.svg)
+![MinIO](https://img.shields.io/badge/MinIO-Object_Storage-c7202c.svg)
 ![Qdrant](https://img.shields.io/badge/Qdrant-Vector_Database-ff5252.svg)
 ![Redis](https://img.shields.io/badge/Redis-Distributed_Cache-dc382d.svg)
 ![Streamlit](https://img.shields.io/badge/Streamlit-UI-FF4B4B.svg)
 
-production-oriented Retrieval-Augmented Generation (RAG) system for academic and technical research.
-Built with FastAPI, Qdrant, Redis, and BGE-M3 hybrid retrieval to support scalable document ingestion, grounded question answering, and retrieval observability.
+Production-oriented Retrieval-Augmented Generation (RAG) system for academic and technical research.
+Built with FastAPI, Arq, Qdrant, Redis, PostgreSQL, MinIO, and BGE-M3 hybrid retrieval to support scalable document ingestion, grounded question answering, and retrieval observability.
 ## Quick demo
 
 https://github.com/user-attachments/assets/141681c7-0ad6-487a-a2ce-e6c93a29f92f
@@ -50,8 +52,8 @@ To optimize latency and memory, the system decouples vector search from payload 
 
 ### 3. Asynchronous, Non-Blocking Ingestion Pipeline
 Uploading large PDFs does not freeze the API or the UI:
-* **FastAPI BackgroundTasks:** Document parsing (via `Docling`), chunking, embedding, and upserting are fully delegated to background workers.
-* **Thread-Safe TaskTracker:** An in-memory singleton tracks real-time progress.
+* **Arq (Redis) Background Workers:** Document parsing (via `Docling`), chunking, embedding, and upserting are fully delegated to robust, distributed background workers, guaranteeing zero data loss.
+* **Persistent Storage:** Metadata is safely persisted in PostgreSQL and raw documents in MinIO before processing.
 * **Streamlit Fragments (`@st.fragment`):** The frontend UI polls the backend status API without re-rendering the entire chat interface, providing a smooth user experience.
 
 ### 4. Advanced Observability & Citation Debugging
@@ -149,23 +151,24 @@ src/
 ## Tech Stack
 - **Backend Framework:** FastAPI
 - **Frontend UI:** Streamlit
-- **Vector Database:** Qdrant (Docker)
-- **Caching Layer:** Redis (Docker)
+- **Task Queue & Background Worker:** Arq (Redis)
+- **Vector Database:** Qdrant
+- **Relational Database:** PostgreSQL
+- **Object Storage:** MinIO
+- **Caching Layer:** Redis
 - **Embedding Model:** BAAI/bge-m3 (via `FlagEmbedding`)
-- **LLM Provider:** Groq (Llama-3/Mixtral)
+- **LLM Provider:** Groq / Gemini
 - **Document Parsing:** Docling / PyMuPDF
 
 ---
 
 ## Future Work
 
-To evolve this system into a globally scalable enterprise architecture, the following improvements are planned:
-- Celery / distributed ingestion workers
-- Redis-backed persistent task tracking
+To further evolve this enterprise architecture, the following improvements are planned:
 - GPU embedding workers
-- Distributed ingestion queues
 - Retrieval evaluation datasets
 - Prometheus / Grafana observability
+- CI/CD automated deployment
 
 ---
 
@@ -175,36 +178,32 @@ To evolve this system into a globally scalable enterprise architecture, the foll
 - Docker & Docker Compose
 - Groq API Key
 
-### 1. Spin up the Infrastructure (Qdrant & Redis)
+### 1. Configure Environment Variables
 ```bash
-cd docker
-docker-compose up -d
+cp .env.example .env
+# Open .env and add your GROQ_API_KEY or GEMINI_API_KEY
 ```
 
-### 2. Install Dependencies
+### 2. Spin up the Backend Services
+The backend API, Arq worker, PostgreSQL, MinIO, Qdrant, and Redis are all containerized:
+```bash
+cd docker
+docker-compose up -d --build
+```
+
+### 3. Run the Streamlit UI (Locally)
+The frontend Streamlit app runs locally:
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # macOS/Linux
 # .venv\Scripts\activate   # Windows
 
 pip install -r requirements.txt
+
+export API_BASE_URL=http://127.0.0.1:8000
 ```
 
-### 3. Configure Environment Variables
-```bash
-cp .env.example .env
-# Open .env and add your GROQ_API_KEY
-```
-
-### 4. Run the Application
-You will need two terminal windows:
-
-**Terminal 1: Start the Backend API**
-```bash
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-**Terminal 2: Start the Streamlit UI**
+**Terminal:** Start the Streamlit UI
 ```bash
 export API_BASE_URL=http://127.0.0.1:8000
 streamlit run app.py
