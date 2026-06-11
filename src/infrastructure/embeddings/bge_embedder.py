@@ -38,3 +38,36 @@ class BgeEmbedder(EmbedderPort):
                 "values": values
             }
         }
+
+    def encode_documents(self, texts: list[str]) -> list[Dict[str, Any]]:
+        if not texts:
+            return []
+        
+        with self._lock:
+            output = self._model.encode(
+                texts,
+                batch_size=16,
+                return_dense=True,
+                return_sparse=True,
+                return_colbert_vecs=False
+            )
+            
+        dense_vecs = [v.tolist() for v in output['dense_vecs']]
+        lexical_weights = output['lexical_weights']
+        
+        result = []
+        for dense, lex in zip(dense_vecs, lexical_weights):
+            indices = []
+            values = []
+            for k, v in lex.items():
+                indices.append(int(k))
+                values.append(float(v))
+            result.append({
+                "dense": dense,
+                "sparse": {
+                    "indices": indices,
+                    "values": values
+                }
+            })
+            
+        return result

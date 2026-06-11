@@ -130,16 +130,7 @@ class QdrantVectorStore(VectorStorePort):
 
         texts = [str(c.get("text", "")) for c in chunks]
         
-        # We need a batched encode. Since EmbedderPort only has encode_query right now,
-        # we will hack it using encode_query in a loop, or better, we should update EmbedderPort.
-        # But BGEM3FlagModel can batch encode.
-        # Since we injected `BgeEmbedder`, let's assume it has an internal model we can use, 
-        # or we just loop for now to make it runnable without breaking EmbedderPort.
-        vectors = []
-        for text in texts:
-            # We use encode_query since it returns dict with dense and sparse
-            vec = self._embedder.encode_query(text)
-            vectors.append(vec)
+        vectors = self._embedder.encode_documents(texts)
 
         self._create_collection(vector_size=len(vectors[0]["dense"]))
 
