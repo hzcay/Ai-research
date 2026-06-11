@@ -113,10 +113,10 @@ class QdrantVectorStore(VectorStorePort):
                 )
                 return list(response.points)
             except Exception as e:
-                    return []
-                if attempt >= self._retries:
-                    raise
-                time.sleep(0.2 * math.pow(2, attempt))
+                return []
+            if attempt >= self._retries:
+                raise
+            time.sleep(0.2 * math.pow(2, attempt))
         return []
 
     def upsert_chunks(self, chunks: List[Dict[str, Any]]) -> int:

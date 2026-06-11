@@ -29,17 +29,17 @@ class IngestPdfsUseCase:
             doc_id = str(uuid.uuid4())
             
             safe_filename = filename.replace(" ", "_")
-                object_name = f"raw/{content_hash[:16]}_{safe_filename}"
-                await asyncio.to_thread(self._storage.upload_bytes, object_name, file_bytes)
-                minio_path = f"s3://bucket/{object_name}" 
-                
-                doc_record = Document(
-                    id=doc_id,
-                    filename=filename,
-                    minio_path=minio_path,
-                    status="queued"
-                )
-                await self._repo.create_document(doc_record)
+            object_name = f"raw/{content_hash[:16]}_{safe_filename}"
+            await asyncio.to_thread(self._storage.upload_bytes, object_name, file_bytes)
+            minio_path = f"s3://bucket/{object_name}" 
+            
+            doc_record = Document(
+                id=doc_id,
+                filename=filename,
+                minio_path=minio_path,
+                status="queued"
+            )
+            await self._repo.create_document(doc_record)
                 
             await self._task_queue.enqueue_job("process_document_job", doc_id)
             logger.info(f"Enqueued document {filename} with ID {doc_id}")
