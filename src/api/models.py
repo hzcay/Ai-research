@@ -2,13 +2,11 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-
 class ChatRequest(BaseModel):
     query: str
     conversation_id: Optional[str] = None
     document_id: Optional[str] = None
     auto_expand_corpus: bool = True
-
 
 class Citation(BaseModel):
     id: int
@@ -31,7 +29,6 @@ class ChatResponse(BaseModel):
     answer: str
     citations: List[Citation]
     debug: RetrievalDebug
-
 
 class SearchRequest(BaseModel):
     query: str

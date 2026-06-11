@@ -4,7 +4,7 @@ from src.application.ports.object_storage_port import ObjectStoragePort
 from src.application.ports.parse_port import ParsePort
 from src.application.ports.embedder_port import EmbedderPort
 from src.application.ports.vector_store_port import VectorStorePort
-from src.infrastructure.database.models import Chunk
+from src.domain.entities.document import Chunk
 import tempfile
 import os
 import hashlib

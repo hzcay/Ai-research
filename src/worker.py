@@ -15,7 +15,7 @@ from src.infrastructure.database.postgres_repository import PostgresRepository
 from src.infrastructure.storage.minio_storage import MinioStorage
 from src.infrastructure.indexing.qdrant_indexer import QdrantIndexer
 from src.infrastructure.parsing.docling_parser import parse_research_paper
-from src.infrastructure.database.models import Chunk
+from src.domain.entities.document import Chunk
 from src.utils.logger import setup_logger
 
 from src.application.container import get_process_document_use_case

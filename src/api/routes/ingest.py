@@ -3,7 +3,7 @@ from arq import create_pool
 from arq.connections import RedisSettings
 from src.infrastructure.storage.minio_storage import MinioStorage
 from src.infrastructure.database.postgres_repository import PostgresRepository
-from src.infrastructure.database.models import Document, IngestionJob
+from src.domain.entities.document import Document, IngestionJob
 from src.infrastructure.indexing.qdrant_indexer import QdrantIndexer
 
 import hashlib

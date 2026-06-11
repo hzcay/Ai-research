@@ -9,7 +9,7 @@ import asyncio
 from src.application.ports.object_storage_port import ObjectStoragePort
 from src.application.ports.document_repository_port import DocumentRepositoryPort
 from src.application.ports.task_queue_port import TaskQueuePort
-from src.infrastructure.database.models import Document
+from src.domain.entities.document import Document
 from src.utils.logger import logger
 
 class IngestPdfsUseCase:
@@ -41,7 +41,7 @@ class IngestPdfsUseCase:
             )
             await self._repo.create_document(doc_record)
                 
-            await self._task_queue.enqueue_job("process_document_job", doc_id)
+            await self._task_queue.enqueue_job("process_document", doc_id)
             logger.info(f"Enqueued document {filename} with ID {doc_id}")
             
             return {

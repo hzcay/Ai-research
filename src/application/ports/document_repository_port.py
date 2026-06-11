@@ -1,5 +1,5 @@
 from typing import Protocol, List, Optional
-from src.infrastructure.database.models import Document, Chunk, IngestionJob
+from src.domain.entities.document import Document, Chunk, IngestionJob
 
 class DocumentRepositoryPort(Protocol):
     async def create_document(self, document: Document) -> Document:
