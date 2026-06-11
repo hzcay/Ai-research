@@ -13,3 +13,6 @@ class VectorStorePort(Protocol):
         document_id: Optional[str] = None,
     ) -> List[RetrievedChunk]:
         ...
+
+    def upsert_chunks(self, chunks: List[Dict[str, Any]]) -> int:
+        ...

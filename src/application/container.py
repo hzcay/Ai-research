@@ -22,6 +22,9 @@ from src.utils.metrics import GlobalMetricsTracker
 from src.application.ports.reranker_port import RerankerPort
 from src.infrastructure.embeddings.noop_reranker import NoOpReranker
 from src.infrastructure.embeddings.bge_reranker import BgeReranker
+from src.infrastructure.indexing.arq_task_queue import ArqTaskQueueAdapter
+from src.infrastructure.parsing.docling_adapter import DoclingParseAdapter
+from src.application.use_cases.process_document import ProcessDocumentUseCase
 
 @lru_cache()
 def get_global_metrics() -> GlobalMetricsTracker:
@@ -74,6 +77,14 @@ def get_minio_storage() -> MinioStorage:
     return MinioStorage()
 
 @lru_cache()
+def get_task_queue_adapter() -> ArqTaskQueueAdapter:
+    return ArqTaskQueueAdapter()
+
+@lru_cache()
+def get_parse_adapter() -> DoclingParseAdapter:
+    return DoclingParseAdapter()
+
+@lru_cache()
 def get_document_indexer() -> DocumentIndexer:
     return DocumentIndexer(
         settings=get_settings(),
@@ -98,6 +109,7 @@ def get_retrieve_context_use_case() -> RetrieveContextUseCase:
     vector_store = QdrantVectorStore(
         qdrant_url=settings.qdrant_url,
         collection_name=settings.qdrant_collection,
+        embedder=embedder,
         timeout_s=settings.qdrant_timeout_s,
         retries=settings.qdrant_retries,
         lexical_candidate_limit=settings.lexical_candidate_limit,
@@ -105,8 +117,8 @@ def get_retrieve_context_use_case() -> RetrieveContextUseCase:
     return RetrieveContextUseCase(
         embedder=embedder,
         vector_store=vector_store,
-        redis_cache=get_redis_hot_cache(),
-        postgres_repo=get_postgres_repository(),
+        chunk_cache=get_redis_hot_cache(),
+        document_repo=get_postgres_repository(),
         hybrid_enabled=settings.hybrid_enabled,
         alpha=settings.hybrid_alpha,
         beta=settings.hybrid_beta,
@@ -146,5 +158,28 @@ def get_generate_answer_use_case() -> GenerateAnswerUseCase:
 
 @lru_cache()
 def get_ingest_pdfs_use_case() -> IngestPdfsUseCase:
-    return IngestPdfsUseCase(indexer=get_document_indexer())
+    return IngestPdfsUseCase(
+        storage_port=get_minio_storage(),
+        repo_port=get_postgres_repository(),
+        task_queue=get_task_queue_adapter()
+    )
+
+@lru_cache()
+def get_process_document_use_case() -> ProcessDocumentUseCase:
+    settings = get_settings()
+    vector_store = QdrantVectorStore(
+        qdrant_url=settings.qdrant_url,
+        collection_name=settings.qdrant_collection,
+        embedder=get_embedder(),
+        timeout_s=settings.qdrant_timeout_s,
+        retries=settings.qdrant_retries,
+        lexical_candidate_limit=settings.lexical_candidate_limit,
+    )
+    return ProcessDocumentUseCase(
+        document_repo=get_postgres_repository(),
+        storage_port=get_minio_storage(),
+        parse_port=get_parse_adapter(),
+        embedder=get_embedder(),
+        vector_store=vector_store
+    )
     

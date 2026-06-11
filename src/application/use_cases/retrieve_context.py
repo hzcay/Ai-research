@@ -7,8 +7,8 @@ from src.application.ports.embedder_port import EmbedderPort
 from src.application.ports.vector_store_port import VectorStorePort
 from src.application.ports.reranker_port import RerankerPort
 from src.domain.entities.retrieval import RetrievedChunk
-from src.infrastructure.cache.redis_hot_cache import RedisHotCache
-from src.infrastructure.database.postgres_repository import PostgresRepository
+from src.application.ports.cache_port import ChunkCachePort
+from src.application.ports.document_repository_port import DocumentRepositoryPort
 from src.utils.logger import logger
 import asyncio
 import json
@@ -19,15 +19,15 @@ class RetrieveContextUseCase:
         self,
         embedder: EmbedderPort,
         vector_store: VectorStorePort,
-        redis_cache: RedisHotCache,
-        postgres_repo: PostgresRepository,
+        chunk_cache: ChunkCachePort,
+        document_repo: DocumentRepositoryPort,
         reranker: Optional[RerankerPort] = None,
         **kwargs
     ) -> None:
         self._embedder = embedder
         self._vector_store = vector_store
-        self._redis_cache = redis_cache
-        self._postgres_repo = postgres_repo
+        self._chunk_cache = chunk_cache
+        self._document_repo = document_repo
         self._reranker = reranker
         self._rerank_enabled = kwargs.get("rerank_enabled", False)
         self._rerank_top_n = kwargs.get("rerank_top_n", 20)
@@ -47,7 +47,6 @@ class RetrieveContextUseCase:
         
         start_retrieval = time.perf_counter()
         
-        # Determine actual top_k for vector search
         actual_top_k = self._rerank_top_n if (self._rerank_enabled and self._reranker) else top_k
         
         out = self._vector_store.search(
@@ -65,15 +64,15 @@ class RetrieveContextUseCase:
         if not parent_ids:
             parent_ids = [chunk.id for chunk in out]
             
-        cached_texts = self._redis_cache.get_multiple_chunks(parent_ids)
+        cached_texts = self._chunk_cache.get_multiple_chunks(parent_ids)
         
         missing_ids = [pid for pid in parent_ids if pid not in cached_texts]
         if missing_ids:
             try:
-                db_chunks = await self._postgres_repo.get_chunks_by_ids(missing_ids)
+                db_chunks = await self._document_repo.get_chunks_by_ids(missing_ids)
                 for db_chunk in db_chunks:
                     cached_texts[db_chunk.chunk_id] = db_chunk.text_content
-                    self._redis_cache.set_chunk_text(db_chunk.chunk_id, db_chunk.text_content)
+                    self._chunk_cache.set_chunk_text(db_chunk.chunk_id, db_chunk.text_content)
             except Exception as e:
                 logger.error(f"Postgres hydration failed: {e}")
                 
@@ -98,7 +97,7 @@ class RetrieveContextUseCase:
             )
             
         rerank_ms = 0.0
-        # Optional Two-Stage Retrieval (Reranking)
+
         if self._rerank_enabled and self._reranker and parent_out:
             start_rerank = time.perf_counter()
             texts = [c.text for c in parent_out]
@@ -106,20 +105,18 @@ class RetrieveContextUseCase:
                 scores = self._reranker.rerank(query, texts)
                 for c, s in zip(parent_out, scores):
                     c.score = s
-                # Sắp xếp lại theo điểm rerank giảm dần
+
                 parent_out.sort(key=lambda x: x.score, reverse=True)
                 parent_out = parent_out[:self._rerank_final_k]
             except Exception as e:
                 logger.error(f"Reranking failed: {e}")
-                # Fallback: không rerank nữa, cắt về top_k ban đầu
                 parent_out = parent_out[:top_k]
                 
             rerank_ms = (time.perf_counter() - start_rerank) * 1000
         else:
-            # Nếu không rerank, cắt về top_k theo kết quả Vector Store
+            
             parent_out = parent_out[:top_k]
 
-        # Áp dụng giới hạn Token Context
         final_out = []
         total_tokens = 0
         MAX_CONTEXT_TOKENS = 6000 

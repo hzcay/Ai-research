@@ -23,3 +23,17 @@ class SemanticCachePort(ABC):
         metadata: dict
     ) -> None:
         pass
+
+
+class ChunkCachePort(ABC):
+    @abstractmethod
+    def get_chunk_text(self, chunk_id: str) -> Optional[str]:
+        pass
+
+    @abstractmethod
+    def set_chunk_text(self, chunk_id: str, text: str) -> None:
+        pass
+
+    @abstractmethod
+    def get_multiple_chunks(self, chunk_ids: list[str]) -> Dict[str, str]:
+        pass

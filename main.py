@@ -8,7 +8,6 @@ from src.api.dependencies import init_app_dependencies
 from src.api.routes import chat, ingest, search
 from src.infrastructure.config.settings import get_settings
 
-
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_app_dependencies()
