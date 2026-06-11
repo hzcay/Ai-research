@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y \
     libxcb-shape0 \
     libxcb-xfixes0 \
     && rm -rf /var/lib/apt/lists/*
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && pip install --no-cache-dir --default-timeout=1000 -r requirements.txt
 
 COPY . .
 

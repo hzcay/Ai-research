@@ -3,7 +3,7 @@ from arq import create_pool
 from arq.connections import RedisSettings
 from src.infrastructure.storage.minio_storage import MinioStorage
 from src.infrastructure.database.postgres_repository import PostgresRepository
-from src.infrastructure.database.models import Document, IngestionJob
+from src.domain.entities.document import Document, IngestionJob
 from src.infrastructure.indexing.qdrant_indexer import QdrantIndexer
 
 import hashlib
@@ -11,6 +11,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from loguru import logger
 from src.infrastructure.config.settings import get_settings
 from src.api.models import IngestUploadResponse
+from src.application.container import get_ingest_pdfs_use_case
 
 router = APIRouter()
 
@@ -30,51 +31,21 @@ async def ingest_upload(
         raise HTTPException(status_code=400, detail="Empty file.")
         
     name = file.filename or "upload.pdf"
-    content_hash = hashlib.sha256(raw).hexdigest()
-    doc_id = str(uuid.uuid4())
-    job_id = str(uuid.uuid4())
     
-    settings = get_settings()
-    minio = MinioStorage()
-    postgres = PostgresRepository()
+    use_case = get_ingest_pdfs_use_case()
     
-    import asyncio
-    # 1. Upload to MinIO
-    object_name = f"raw/{content_hash[:16]}_{name}"
     try:
-        await asyncio.to_thread(minio.upload_bytes, object_name, raw)
-        minio_path = f"s3://{settings.minio_bucket}/{object_name}"
+        result = await use_case.execute(file_bytes=raw, filename=name)
+        return {
+            "status": result["status"],
+            "content_hash": result["content_hash"],
+            "doc_id": result["doc_id"],
+            "points_upserted": 0,
+            "message": result["message"]
+        }
     except Exception as e:
-        logger.error(f"Failed to upload to MinIO: {e}")
-        raise HTTPException(status_code=500, detail="Storage Error")
-
-    # 2. Save Document (uploaded) and IngestionJob (queued)
-    doc_record = Document(
-        id=doc_id,
-        filename=name,
-        minio_path=minio_path,
-        status="uploaded"
-    )
-    await postgres.create_document(doc_record)
-    
-    job_record = IngestionJob(
-        id=job_id,
-        doc_id=doc_id,
-        status="queued"
-    )
-    await postgres.create_ingestion_job(job_record)
-
-    # 3. Enqueue to Arq
-    redis = await get_redis_pool()
-    await redis.enqueue_job("process_document", job_id)
-    
-    return {
-        "status": "queued",
-        "content_hash": content_hash,
-        "doc_id": doc_id,
-        "points_upserted": 0,
-        "message": "Job queued for processing."
-    }
+        logger.error(f"Ingest failed: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @router.get("/status/{doc_id}")
 async def get_task_status(doc_id: str):
