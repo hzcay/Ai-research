@@ -9,6 +9,5 @@ def init_app_dependencies() -> None:
     settings = get_settings()
     setup_logger(settings.log_level)
 
-
 def get_settings_dep():
     return get_settings()
