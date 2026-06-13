@@ -196,7 +196,7 @@ def main() -> None:
         st.set_page_config(
             page_title="Research assistant",
             layout="centered",
-            initial_sidebar_state="collapsed",
+            initial_sidebar_state="expanded",
             menu_items={
                 "Get Help": None,
                 "Report a bug": None,
@@ -207,7 +207,7 @@ def main() -> None:
         st.set_page_config(
             page_title="Research assistant",
             layout="centered",
-            initial_sidebar_state="collapsed",
+            initial_sidebar_state="expanded",
         )
 
     st.markdown(_CSS, unsafe_allow_html=True)

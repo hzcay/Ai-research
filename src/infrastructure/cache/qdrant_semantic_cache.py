@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timezone
 from uuid import uuid4
+from qdrant_client.http.models import Distance, VectorParams
 
 from src.application.ports.cache_port import SemanticCachePort
 
@@ -10,30 +11,31 @@ class QdrantSemanticCache(SemanticCachePort):
         self.redis = redis_client
         self.ttl = cache_ttl_seconds
         self.collection_name = collection_name
+        self._collection_ensured = False
+
+    def _ensure_collection(self, vector_size: int):
+        if self._collection_ensured:
+            return
+        try:
+            existing = {c.name for c in self.client.get_collections().collections}
+            if self.collection_name not in existing:
+                self.client.create_collection(
+                    collection_name=self.collection_name,
+                    vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE)
+                )
+            self._collection_ensured = True
+        except Exception:
+            pass
 
     async def get(
-        self, 
-        query_vector, 
-        tenant_id, 
-        permission_scope, 
-        corpus_version, 
-        document_scope_hash, 
-        retrieval_mode,
-        query_type,
-        language="vi",
-        threshold=0.95
+        self,
+        query: str,
+        query_vector: list[float],
+        tenant_id: str,
+        threshold: float = 0.92
     ):
-        if query_type != "stable":
-            return None
-
         must_filters = [
-            {"key": "tenant_id", "match": {"value": tenant_id}},
-            {"key": "permission_scope", "match": {"value": permission_scope}},
-            {"key": "corpus_version", "match": {"value": corpus_version}},
-            {"key": "document_scope_hash", "match": {"value": document_scope_hash}},
-            {"key": "retrieval_mode", "match": {"value": retrieval_mode}},
-            {"key": "query_type", "match": {"value": "stable"}},
-            {"key": "language", "match": {"value": language}}
+            {"key": "tenant_id", "match": {"value": tenant_id}}
         ]
 
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -42,13 +44,17 @@ class QdrantSemanticCache(SemanticCachePort):
             "range": {"gte": now_iso}
         })
 
-        results = self.client.search(
-            collection_name=self.collection_name,
-            query_vector=query_vector,
-            query_filter={"must": must_filters},
-            limit=1,
-            with_payload=True
-        )
+        try:
+            results = self.client.search(
+                collection_name=self.collection_name,
+                query_vector=query_vector,
+                query_filter={"must": must_filters},
+                limit=1,
+                with_payload=True
+            )
+        except Exception:
+            # Collection might not exist yet
+            return None
 
         if not results:
             return None
@@ -79,24 +85,15 @@ class QdrantSemanticCache(SemanticCachePort):
         }
 
     async def set(
-        self, 
-        query, 
-        query_vector, 
-        answer, 
-        sources, 
-        tenant_id, 
-        permission_scope, 
-        corpus_version, 
-        document_scope_hash, 
-        retrieval_mode,
-        query_type,
-        language="vi",
-        metadata=None
+        self,
+        query: str,
+        query_vector: list[float],
+        answer: str,
+        sources: list[dict],
+        tenant_id: str,
+        metadata: dict
     ):
-        if query_type != "stable":
-            return
-
-        metadata = metadata or {}
+        self._ensure_collection(len(query_vector))
         cache_id = str(uuid4())
         point_id = str(uuid4())
 
@@ -108,7 +105,7 @@ class QdrantSemanticCache(SemanticCachePort):
             "sources": sources,
             "tenant_id": tenant_id,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            **metadata
+            **(metadata or {})
         }
         
         redis_key = f"retrieval_result:{cache_id}"
@@ -123,12 +120,6 @@ class QdrantSemanticCache(SemanticCachePort):
                     "payload": {
                         "cache_id": cache_id,
                         "tenant_id": tenant_id,
-                        "corpus_version": corpus_version,
-                        "document_scope_hash": document_scope_hash,
-                        "permission_scope": permission_scope,
-                        "retrieval_mode": retrieval_mode,
-                        "query_type": query_type,
-                        "language": language,
                         "expires_at": expires_at.isoformat()
                     }
                 }
