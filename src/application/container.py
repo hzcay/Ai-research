@@ -40,13 +40,11 @@ def get_embedder() -> BgeEmbedder:
     settings = get_settings()
     return BgeEmbedder(model_name=settings.embed_model_name)
 
-
 @lru_cache()
 def get_redis_client():
     import redis
     settings = get_settings()
     return redis.Redis.from_url(settings.redis_url, decode_responses=True)
-
 
 @lru_cache()
 def get_semantic_cache() -> SemanticCachePort:
@@ -62,7 +60,6 @@ def get_semantic_cache() -> SemanticCachePort:
         cache_ttl_seconds=settings.cache_ttl_seconds,
         collection_name="semantic_cache"
     )
-
 
 @lru_cache()
 def get_redis_hot_cache() -> RedisHotCache:
@@ -155,7 +152,6 @@ def get_generate_answer_use_case() -> GenerateAnswerUseCase:
         semantic_cache=get_semantic_cache()
     )
 
-
 @lru_cache()
 def get_ingest_pdfs_use_case() -> IngestPdfsUseCase:
     return IngestPdfsUseCase(
@@ -182,4 +178,3 @@ def get_process_document_use_case() -> ProcessDocumentUseCase:
         embedder=get_embedder(),
         vector_store=vector_store
     )
-    

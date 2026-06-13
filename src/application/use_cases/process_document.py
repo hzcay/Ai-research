@@ -61,3 +61,4 @@ class ProcessDocumentUseCase:
             if doc:
                 doc.status = "failed"
                 await self._document_repo.update_document(doc)
+            raise e
