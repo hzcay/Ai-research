@@ -16,3 +16,6 @@ class VectorStorePort(Protocol):
 
     def upsert_chunks(self, chunks: List[Dict[str, Any]]) -> int:
         ...
+
+    def delete_document(self, document_id: str) -> None:
+        ...

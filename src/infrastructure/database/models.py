@@ -16,6 +16,7 @@ class Document(Base):
     status = Column(String, default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
     metadata_ = Column("metadata", JSONB, default=dict)
+    content_hash = Column(String, nullable=True, unique=True, index=True)
 
 class IngestionJob(Base):
     __tablename__ = "ingestion_jobs"
@@ -24,6 +25,8 @@ class IngestionJob(Base):
     doc_id = Column(String, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     status = Column(String, default="queued")
     created_at = Column(DateTime, default=datetime.utcnow)
+    error_message = Column(Text, nullable=True)
+    queue_job_id = Column(String, nullable=True)
 
 class Chunk(Base):
     __tablename__ = "chunks"
@@ -41,6 +44,8 @@ class Chunk(Base):
     page_end = Column(Integer, nullable=True)
     token_count = Column(Integer, nullable=True)
     content_hash = Column(String, nullable=True, index=True)
+    section_path = Column(String, nullable=True)
+    source_content_hash = Column(String, nullable=True, index=True)
     
     embedding_status = Column(String, default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)

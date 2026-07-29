@@ -304,6 +304,13 @@ def _parse_with_docling(pdf_path: Path) -> Dict[str, Any]:
 
     with fitz.open(pdf_path) as fdoc:
         total_pages = fdoc.page_count
+        pages = [
+            {
+                "page_number": idx + 1,
+                "text": fdoc.load_page(idx).get_text("text").strip(),
+            }
+            for idx in range(fdoc.page_count)
+        ]
 
     cleaned_markdown = clean_markdown_text(markdown)
 
@@ -317,6 +324,7 @@ def _parse_with_docling(pdf_path: Path) -> Dict[str, Any]:
             "has_tables": "|" in markdown and "---" in markdown,
         },
         "total_pages": total_pages,
+        "pages": pages,
         "raw_content": markdown,
         "content": cleaned_markdown,
     }
@@ -342,6 +350,10 @@ def _parse_with_pymupdf(pdf_path: Path) -> Dict[str, Any]:
             "has_tables": False,
         },
         "total_pages": len(pages_text),
+        "pages": [
+            {"page_number": idx + 1, "text": text}
+            for idx, text in enumerate(pages_text)
+        ],
         "raw_content": full_text,
         "content": cleaned_text,
     }

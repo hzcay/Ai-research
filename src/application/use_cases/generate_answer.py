@@ -175,7 +175,7 @@ class GenerateAnswerUseCase:
             parts.append(
                 f"[Source {idx}]\n"
                 f"document_name: {chunk.metadata.get('filename', 'Unknown')}\n"
-                f"page: {chunk.metadata.get('page')}\n"
+                f"page: {chunk.metadata.get('page') or chunk.page_start}\n"
                 f"chunk_id: {chunk.id}\n"
                 f"score: {chunk.score}\n\n"
                 f"content:\n{chunk.text}\n"
@@ -189,7 +189,7 @@ class GenerateAnswerUseCase:
             citations.append({
                 "id": idx,
                 "document_name": chunk.metadata.get("filename", "Unknown"),
-                "page": chunk.metadata.get("page"),
+                "page": chunk.metadata.get("page") or chunk.page_start,
                 "chunk_id": chunk.id,
                 "score": round(float(chunk.score or 0.0), 4),
                 "text": chunk.text[:700]

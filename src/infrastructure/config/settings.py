@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     qdrant_retries: int = 2
 
     upload_dir: str = "data/uploads"
+    max_upload_bytes: int = 50 * 1024 * 1024
 
     hybrid_enabled: bool = True
     hybrid_alpha: float = 0.7

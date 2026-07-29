@@ -12,6 +12,7 @@ from src.application.ports.embedder_port import EmbedderPort
 from src.domain.entities.retrieval import RetrievedChunk
 import hashlib
 from qdrant_client.http.models import Distance, VectorParams, SparseVectorParams, SparseIndexParams
+from src.utils.logger import logger
 
 
 def _doc_id_filter(document_id: Optional[str]) -> Optional[models.Filter]:
@@ -61,7 +62,8 @@ class QdrantVectorStore(VectorStorePort):
                     doc_id=payload.get("doc_id", ""),
                     score=getattr(hit, "score", None),
                     text="", 
-                    page_start=payload.get("page"),
+                    page_start=payload.get("page_start"),
+                    page_end=payload.get("page_end"),
                     metadata=payload,
                 )
             )
@@ -113,11 +115,13 @@ class QdrantVectorStore(VectorStorePort):
                 )
                 return list(response.points)
             except Exception as e:
-                return []
-            if attempt >= self._retries:
-                raise
-            time.sleep(0.2 * math.pow(2, attempt))
-        return []
+                if attempt >= self._retries:
+                    logger.error(
+                        f"Qdrant query failed after {attempt + 1} attempts: {e}"
+                    )
+                    raise RuntimeError("Vector search is temporarily unavailable") from e
+                time.sleep(0.2 * math.pow(2, attempt))
+        raise RuntimeError("Vector search did not complete")
 
     def upsert_chunks(self, chunks: List[Dict[str, Any]]) -> int:
         if not chunks:
@@ -131,6 +135,8 @@ class QdrantVectorStore(VectorStorePort):
         texts = [str(c.get("text", "")) for c in chunks]
         
         vectors = self._embedder.encode_documents(texts)
+        if len(vectors) != len(chunks):
+            raise RuntimeError("Embedder returned an unexpected number of vectors")
 
         self._create_collection(vector_size=len(vectors[0]["dense"]))
 
@@ -146,6 +152,10 @@ class QdrantVectorStore(VectorStorePort):
                 "filename": c.get("filename"),
                 "chunk_type": c.get("chunk_type"),
                 "token_estimate": c.get("token_estimate"),
+                "page_start": c.get("page_start"),
+                "page_end": c.get("page_end"),
+                "section_path": c.get("section"),
+                "source_content_hash": c.get("source_content_hash"),
                 "metadata": c.get("metadata", {}),
             }
             
@@ -159,8 +169,41 @@ class QdrantVectorStore(VectorStorePort):
             
             points.append(models.PointStruct(id=point_id, vector=qdrant_vector, payload=payload))
 
-        self._client.upsert(collection_name=self._collection_name, points=points, wait=True)
-        return len(points)
+        for attempt in range(self._retries + 1):
+            try:
+                self._client.upsert(
+                    collection_name=self._collection_name, points=points, wait=True
+                )
+                return len(points)
+            except Exception as exc:
+                if attempt >= self._retries:
+                    logger.error(
+                        f"Qdrant upsert failed after {attempt + 1} attempts: {exc}"
+                    )
+                    raise RuntimeError("Vector indexing is temporarily unavailable") from exc
+                time.sleep(0.2 * math.pow(2, attempt))
+        raise RuntimeError("Vector indexing did not complete")
+
+    def delete_document(self, document_id: str) -> None:
+        if not document_id:
+            return
+        selector = models.FilterSelector(filter=_doc_id_filter(document_id))
+        for attempt in range(self._retries + 1):
+            try:
+                self._client.delete(
+                    collection_name=self._collection_name,
+                    points_selector=selector,
+                    wait=True,
+                )
+                return
+            except Exception as exc:
+                if "Not found: Collection" in str(exc):
+                    return
+                if attempt >= self._retries:
+                    raise RuntimeError(
+                        "Existing vector index could not be replaced"
+                    ) from exc
+                time.sleep(0.2 * math.pow(2, attempt))
 
     def _is_qdrant_available(self) -> tuple[bool, str]:
         try:
@@ -186,4 +229,3 @@ class QdrantVectorStore(VectorStorePort):
                 )
             }
         )
-

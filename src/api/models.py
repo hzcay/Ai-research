@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 class ChatRequest(BaseModel):
-    query: str
+    query: str = Field(min_length=1, max_length=4000)
     conversation_id: Optional[str] = None
     document_id: Optional[str] = None
     auto_expand_corpus: bool = True
@@ -31,8 +31,8 @@ class ChatResponse(BaseModel):
     debug: RetrievalDebug
 
 class SearchRequest(BaseModel):
-    query: str
-    top_k: int = 5
+    query: str = Field(min_length=1, max_length=4000)
+    top_k: int = Field(default=5, ge=1, le=50)
     document_id: Optional[str] = None
 
 class IngestUploadResponse(BaseModel):

@@ -150,9 +150,12 @@ def _upload_pdf_with_force(file_obj, api_base: str, force: bool) -> bool:
     if data.get("status") == "duplicate":
         st.session_state._is_processing = False
         st.toast("This file is already in your library. Using it now.")
-    elif data.get("status") == "processing":
+    elif data.get("status") in {"queued", "processing", "retrying"}:
         st.session_state._is_processing = True
         st.toast("File is being processed in background. You can keep chatting.")
+    elif data.get("status") == "failed":
+        st.session_state._is_processing = False
+        st.toast("This file failed previously. Enable replace to retry it.")
     else:
         st.session_state._is_processing = False
         st.toast("File ready. Ask your question below.")
@@ -172,7 +175,7 @@ def _processing_status_fragment(doc_id: str, api_base: str):
                 progress = data.get("progress", 0)
                 msg = data.get("message", "")
                 
-                if status == "processing":
+                if status in {"queued", "processing", "retrying"}:
                     st.info(f"{msg}")
                     st.progress(progress / 100.0)
                 elif status == "completed":

@@ -75,6 +75,7 @@ class RetrieveContextUseCase:
                     self._chunk_cache.set_chunk_text(db_chunk.chunk_id, db_chunk.text_content)
             except Exception as e:
                 logger.error(f"Postgres hydration failed: {e}")
+                raise RuntimeError("Document content is temporarily unavailable") from e
                 
         
         parent_out = []
@@ -83,16 +84,30 @@ class RetrieveContextUseCase:
             if not text:
                 continue
                 
-            best_score = max([c.score for c in out if c.metadata.get("parent_id") == pid or c.id == pid] + [0.0])
+            matching = [
+                c for c in out
+                if c.metadata.get("parent_id") == pid or c.id == pid
+            ]
+            best_match = max(
+                matching, key=lambda c: float(c.score or 0.0), default=None
+            )
+            best_score = float(best_match.score or 0.0) if best_match else 0.0
+            source_metadata = dict(best_match.metadata) if best_match else {}
+            source_metadata.update({
+                "is_parent": True,
+                "source_block_id": pid,
+                "page": source_metadata.get("page_start"),
+            })
             
             parent_out.append(
                 RetrievedChunk(
                     id=pid,
-                    doc_id=out[0].doc_id if out else "",
+                    doc_id=best_match.doc_id if best_match else "",
                     score=best_score,
                     text=text,
-                    page_start=None,
-                    metadata={"is_parent": True}
+                    page_start=source_metadata.get("page_start"),
+                    page_end=source_metadata.get("page_end"),
+                    metadata=source_metadata,
                 )
             )
             
@@ -123,7 +138,7 @@ class RetrieveContextUseCase:
         for c in parent_out:
             est_tokens = len(c.text.split()) * 1.3
             if total_tokens + est_tokens > MAX_CONTEXT_TOKENS:
-                break
+                continue
             total_tokens += est_tokens
             final_out.append(c)
             
@@ -166,10 +181,6 @@ class RetrieveContextUseCase:
             logger.error(f"Failed to write retrieval_debug.json: {e}")
         
         return out, metrics
-
-def _ms(t0: float) -> int:
-    return int((time.perf_counter() - t0) * 1000)
-
 
 def _ms(t0: float) -> int:
     return int((time.perf_counter() - t0) * 1000)

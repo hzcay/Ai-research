@@ -1,23 +1,10 @@
-import uuid
-from arq import create_pool
-from arq.connections import RedisSettings
-from src.infrastructure.storage.minio_storage import MinioStorage
-from src.infrastructure.database.postgres_repository import PostgresRepository
-from src.domain.entities.document import Document, IngestionJob
-from src.infrastructure.indexing.qdrant_indexer import QdrantIndexer
-
-import hashlib
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from loguru import logger
-from src.infrastructure.config.settings import get_settings
 from src.api.models import IngestUploadResponse
-from src.application.container import get_ingest_pdfs_use_case
+from src.application.container import get_ingest_pdfs_use_case, get_postgres_repository
+from src.infrastructure.config.settings import get_settings
 
 router = APIRouter()
-
-async def get_redis_pool():
-    settings = get_settings()
-    return await create_pool(RedisSettings.from_dsn(settings.redis_url))
 
 @router.post("/upload", response_model=IngestUploadResponse)
 async def ingest_upload(
@@ -29,13 +16,21 @@ async def ingest_upload(
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="Empty file.")
+    settings = get_settings()
+    if len(raw) > settings.max_upload_bytes:
+        raise HTTPException(status_code=413, detail="PDF exceeds the upload size limit.")
+    if not raw.startswith(b"%PDF-"):
+        raise HTTPException(status_code=400, detail="File content is not a valid PDF.")
         
     name = file.filename or "upload.pdf"
     
     use_case = get_ingest_pdfs_use_case()
     
     try:
-        result = await use_case.execute(file_bytes=raw, filename=name)
+        force_replace = force.strip().lower() in {"1", "true", "yes", "on"}
+        result = await use_case.execute(
+            file_bytes=raw, filename=name, force=force_replace
+        )
         return {
             "status": result["status"],
             "content_hash": result["content_hash"],
@@ -49,8 +44,30 @@ async def ingest_upload(
 
 @router.get("/status/{doc_id}")
 async def get_task_status(doc_id: str):
-    postgres = PostgresRepository()
+    postgres = get_postgres_repository()
     doc = await postgres.get_document(doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    return {"doc_id": doc_id, "status": doc.status}
+    job = await postgres.get_ingestion_job_by_doc_id(doc_id)
+    progress_by_status = {
+        "queued": 5,
+        "retrying": 25,
+        "processing": 40,
+        "completed": 100,
+        "failed": 100,
+    }
+    messages = {
+        "queued": "Waiting for a worker.",
+        "retrying": "A temporary failure occurred; processing will retry.",
+        "processing": "Parsing and indexing the document.",
+        "completed": "Document is ready.",
+        "failed": "Document processing failed.",
+    }
+    return {
+        "doc_id": doc_id,
+        "status": doc.status,
+        "progress": progress_by_status.get(doc.status, 0),
+        "message": messages.get(doc.status, doc.status),
+        "job_status": job.status if job else None,
+        "error": job.error_message if job and job.status == "failed" else None,
+    }

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-import uuid
 from typing import Any, Dict, List, Tuple
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -12,6 +11,71 @@ def _estimate_tokens(text: str) -> int:
 
 def build_doc_id(filename: str) -> str:
     return hashlib.sha1(filename.encode("utf-8")).hexdigest()[:12]
+
+
+def _stable_chunk_id(doc_id: str, chunk_type: str, index: str, text: str) -> str:
+    text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    raw = f"{doc_id}:{chunk_type}:{index}:{text_hash}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+
+
+def _section_from_text(text: str) -> str | None:
+    match = re.search(r"^#{1,6}\s+(.+)$", text, flags=re.MULTILINE)
+    return match.group(1).strip() if match else None
+
+
+def chunk_document_pages(
+    pages: List[Dict[str, Any]],
+    doc_id: str,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Create deterministic parent blocks and retrieval children per PDF page."""
+    child_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1600,
+        chunk_overlap=240,
+        length_function=len,
+        separators=["\n\n", "\n", ".", " "],
+    )
+    parents: List[Dict[str, Any]] = []
+    children: List[Dict[str, Any]] = []
+
+    for page_index, page in enumerate(pages):
+        text = str(page.get("text") or "").strip()
+        if not text:
+            continue
+        page_number = int(page.get("page_number") or page_index + 1)
+        source_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        section = _section_from_text(text)
+        parent_id = _stable_chunk_id(doc_id, "parent", str(page_number), text)
+        parents.append({
+            "chunk_id": parent_id,
+            "parent_id": parent_id,
+            "chunk_type": "parent",
+            "doc_id": doc_id,
+            "text": text,
+            "token_estimate": _estimate_tokens(text),
+            "page_start": page_number,
+            "page_end": page_number,
+            "section": section,
+            "source_content_hash": source_hash,
+        })
+        for child_index, child_text in enumerate(child_splitter.split_text(text)):
+            child_text = child_text.strip()
+            child_id = _stable_chunk_id(
+                doc_id, "child", f"{page_number}:{child_index}", child_text
+            )
+            children.append({
+                "chunk_id": child_id,
+                "parent_id": parent_id,
+                "chunk_type": "child",
+                "doc_id": doc_id,
+                "text": child_text,
+                "token_estimate": _estimate_tokens(child_text),
+                "page_start": page_number,
+                "page_end": page_number,
+                "section": section,
+                "source_content_hash": source_hash,
+            })
+    return parents, children
 
 def chunk_markdown_with_tables(
     markdown_text: str,
@@ -47,7 +111,7 @@ def chunk_markdown_with_tables(
     child_chunks: List[Dict[str, Any]] = []
     
     for p_idx, p_text in enumerate(parent_texts):
-        parent_id = str(uuid.uuid4())
+        parent_id = _stable_chunk_id(doc_id, "parent", str(p_idx), p_text)
         
         parent_chunks.append({
             "chunk_id": parent_id,
@@ -64,7 +128,7 @@ def chunk_markdown_with_tables(
         # 3. Split Parent into Child Chunks
         c_texts = child_splitter.split_text(p_text)
         for c_idx, c_text in enumerate(c_texts):
-            child_id = str(uuid.uuid4())
+            child_id = _stable_chunk_id(doc_id, "child", f"{p_idx}:{c_idx}", c_text)
             child_chunks.append({
                 "chunk_id": child_id,
                 "parent_id": parent_id,
@@ -108,4 +172,3 @@ def test_chunk_sizes(
         "max_size": max(sizes),
         "avg_size": round(sum(sizes) / len(sizes), 2),
     }
-

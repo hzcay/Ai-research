@@ -13,6 +13,7 @@ class Document:
     status: str = "pending"
     created_at: datetime = field(default_factory=datetime.utcnow)
     metadata_: Dict[str, Any] = field(default_factory=dict)
+    content_hash: Optional[str] = None
 
 @dataclass(slots=True)
 class IngestionJob:
@@ -20,6 +21,8 @@ class IngestionJob:
     doc_id: str
     status: str = "queued"
     created_at: datetime = field(default_factory=datetime.utcnow)
+    error_message: Optional[str] = None
+    queue_job_id: Optional[str] = None
 
 @dataclass(slots=True)
 class Chunk:
@@ -33,5 +36,7 @@ class Chunk:
     page_end: Optional[int] = None
     token_count: Optional[int] = None
     content_hash: Optional[str] = None
+    section_path: Optional[str] = None
+    source_content_hash: Optional[str] = None
     embedding_status: str = "pending"
     created_at: datetime = field(default_factory=datetime.utcnow)

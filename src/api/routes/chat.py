@@ -12,13 +12,6 @@ router = APIRouter()
 async def chat(req: ChatRequest, settings=Depends(get_settings_dep)) -> ChatResponse:
     _ = settings 
     
-    from src.application.container import get_task_tracker
-    tracker = get_task_tracker()
-    if req.document_id:
-        task = tracker.get_task(req.document_id)
-        if task and task.get("status") == "processing":
-            req.document_id = None
-
     generate_use_case = get_generate_answer_use_case()
 
     gen = await generate_use_case.execute(

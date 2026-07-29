@@ -11,6 +11,14 @@ class DocumentRepositoryPort(Protocol):
     async def get_document(self, doc_id: str) -> Optional[Document]:
         ...
 
+    async def get_document_by_content_hash(self, content_hash: str) -> Optional[Document]:
+        ...
+
+    async def create_document_with_job(
+        self, document: Document, job: IngestionJob
+    ) -> Document:
+        ...
+
     async def create_ingestion_job(self, job: IngestionJob) -> IngestionJob:
         ...
 
@@ -20,7 +28,18 @@ class DocumentRepositoryPort(Protocol):
     async def get_ingestion_job(self, job_id: str) -> Optional[IngestionJob]:
         ...
 
+    async def get_ingestion_job_by_doc_id(self, doc_id: str) -> Optional[IngestionJob]:
+        ...
+
+    async def list_ingestion_jobs_by_status(
+        self, statuses: List[str]
+    ) -> List[IngestionJob]:
+        ...
+
     async def create_chunks(self, chunks: List[Chunk]) -> None:
+        ...
+
+    async def delete_chunks_by_document(self, doc_id: str) -> None:
         ...
 
     async def get_chunks_by_ids(self, chunk_ids: List[str]) -> List[Chunk]:

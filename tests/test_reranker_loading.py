@@ -44,8 +44,8 @@ async def test_retrieve_context_skips_reranker_when_disabled():
     use_case = RetrieveContextUseCase(
         embedder=mock_embedder,
         vector_store=mock_vector_store,
-        redis_cache=mock_redis,
-        postgres_repo=mock_postgres,
+        chunk_cache=mock_redis,
+        document_repo=mock_postgres,
         reranker=mock_reranker,
         rerank_enabled=False
     )
