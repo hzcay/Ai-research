@@ -1,11 +1,12 @@
-version: "3.9"
-
 services:
   api:
+    profiles: ["app"]
     container_name: research-assistant-rag-api
+    image: research-assistant-rag:dev
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      target: api
     ports:
       - "8000:8000"
     env_file:
@@ -27,11 +28,13 @@ services:
     restart: unless-stopped
 
   worker:
+    profiles: ["app"]
     container_name: research-assistant-rag-worker
+    image: research-assistant-rag-worker:dev
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    command: arq src.worker.WorkerSettings
+      target: worker
     env_file:
       - ../.env
     environment:
@@ -50,12 +53,30 @@ services:
       - hf_cache:/root/.cache/huggingface
     restart: unless-stopped
 
+  ui:
+    profiles: ["app"]
+    container_name: research-assistant-rag-ui
+    image: research-assistant-rag-ui:dev
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: ui
+    ports:
+      - "3000:3000"
+    env_file:
+      - ../.env
+    environment:
+      - BACKEND_API_URL=http://api:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+
   qdrant:
     image: qdrant/qdrant:latest
     container_name: qdrant
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "56333:6333"
+      - "56334:6334"
     volumes:
       - qdrant_storage:/qdrant/storage
     restart: unless-stopped
@@ -68,7 +89,7 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=ai_research
     ports:
-      - "5432:5432"
+      - "55432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -77,15 +98,15 @@ services:
     image: redis:7-alpine
     container_name: redis
     ports:
-      - "6379:6379"
+      - "56379:6379"
     restart: unless-stopped
 
   minio:
     image: minio/minio:latest
     container_name: minio
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "59000:9000"
+      - "59001:9001"
     environment:
       - MINIO_ROOT_USER=admin
       - MINIO_ROOT_PASSWORD=password
