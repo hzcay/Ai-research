@@ -15,17 +15,28 @@ from qdrant_client.http.models import Distance, VectorParams, SparseVectorParams
 from src.utils.logger import logger
 
 
-def _doc_id_filter(document_id: Optional[str]) -> Optional[models.Filter]:
-    if not document_id:
-        return None
-    return models.Filter(
-        must=[
-            models.FieldCondition(
-                key="doc_id",
-                match=models.MatchValue(value=document_id),
-            )
-        ]
+def _is_missing_collection_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "not found: collection" in message or (
+        "404" in message and "collection" in message and "doesn't exist" in message
     )
+
+
+def _scope_filter(
+    document_id: Optional[str], project_id: Optional[str]
+) -> Optional[models.Filter]:
+    conditions = []
+    if document_id:
+        conditions.append(models.FieldCondition(
+            key="doc_id", match=models.MatchValue(value=document_id)
+        ))
+    if project_id:
+        conditions.append(models.FieldCondition(
+            key="project_id", match=models.MatchValue(value=project_id)
+        ))
+    if not conditions:
+        return None
+    return models.Filter(must=conditions)
 
 
 class QdrantVectorStore(VectorStorePort):
@@ -48,8 +59,9 @@ class QdrantVectorStore(VectorStorePort):
         query_vectors: Dict[str, Any],
         top_k: int,
         document_id: Optional[str] = None,
+        project_id: Optional[str] = None,
     ) -> List[RetrievedChunk]:
-        hits = self._query(query_vectors=query_vectors, top_k=top_k, document_id=document_id)
+        hits = self._query(query_vectors=query_vectors, top_k=top_k, document_id=document_id, project_id=project_id)
         output: List[RetrievedChunk] = []
         for hit in hits:
             payload = getattr(hit, "payload", None) or {}
@@ -74,8 +86,9 @@ class QdrantVectorStore(VectorStorePort):
         query_vectors: Dict[str, Any],
         top_k: int,
         document_id: Optional[str] = None,
+        project_id: Optional[str] = None,
     ) -> List[Any]:
-        qf = _doc_id_filter(document_id)
+        qf = _scope_filter(document_id, project_id)
         
         dense_vec = query_vectors.get("dense")
         sparse_vec = query_vectors.get("sparse")
@@ -115,6 +128,11 @@ class QdrantVectorStore(VectorStorePort):
                 )
                 return list(response.points)
             except Exception as e:
+                if _is_missing_collection_error(e):
+                    logger.info(
+                        f"Qdrant collection {self._collection_name!r} does not exist; returning an empty corpus"
+                    )
+                    return []
                 if attempt >= self._retries:
                     logger.error(
                         f"Qdrant query failed after {attempt + 1} attempts: {e}"
@@ -148,6 +166,7 @@ class QdrantVectorStore(VectorStorePort):
                 "external_id": external_id,
                 "parent_id": c.get("parent_id"),
                 "doc_id": c.get("doc_id"),
+                "project_id": c.get("project_id"),
                 "content_hash": c.get("content_hash"),
                 "filename": c.get("filename"),
                 "chunk_type": c.get("chunk_type"),
@@ -187,7 +206,7 @@ class QdrantVectorStore(VectorStorePort):
     def delete_document(self, document_id: str) -> None:
         if not document_id:
             return
-        selector = models.FilterSelector(filter=_doc_id_filter(document_id))
+        selector = models.FilterSelector(filter=_scope_filter(document_id, None))
         for attempt in range(self._retries + 1):
             try:
                 self._client.delete(

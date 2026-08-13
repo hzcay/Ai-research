@@ -14,6 +14,7 @@ class Document:
     created_at: datetime = field(default_factory=datetime.utcnow)
     metadata_: Dict[str, Any] = field(default_factory=dict)
     content_hash: Optional[str] = None
+    project_id: Optional[str] = None
 
 @dataclass(slots=True)
 class IngestionJob:

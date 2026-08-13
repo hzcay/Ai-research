@@ -6,11 +6,8 @@ from src.application.use_cases.generate_answer import GenerateAnswerUseCase
 from src.application.use_cases.ingest_pdfs import IngestPdfsUseCase
 from src.application.use_cases.retrieve_context import RetrieveContextUseCase
 from src.infrastructure.config.settings import get_settings
-from src.infrastructure.embeddings.bge_embedder import BgeEmbedder
-from src.infrastructure.indexing.document_indexer import DocumentIndexer
 from src.infrastructure.llm.groq_chat_model import GroqChatModel
 from src.infrastructure.llm.gemini_chat_model import GeminiChatModel
-from src.infrastructure.parsing.pdf_parser import PdfParser
 from src.infrastructure.vectorstores.qdrant_store import QdrantVectorStore
 from src.application.ports.cache_port import SemanticCachePort
 from src.infrastructure.cache.qdrant_semantic_cache import QdrantSemanticCache
@@ -23,8 +20,9 @@ from src.application.ports.reranker_port import RerankerPort
 from src.infrastructure.embeddings.noop_reranker import NoOpReranker
 from src.infrastructure.embeddings.bge_reranker import BgeReranker
 from src.infrastructure.indexing.arq_task_queue import ArqTaskQueueAdapter
-from src.infrastructure.parsing.docling_adapter import DoclingParseAdapter
 from src.application.use_cases.process_document import ProcessDocumentUseCase
+from src.application.use_cases.manage_workspace import WorkspaceService
+from src.application.use_cases.dispatch_outbox import OutboxDispatcher
 
 @lru_cache()
 def get_global_metrics() -> GlobalMetricsTracker:
@@ -36,7 +34,9 @@ def get_task_tracker() -> TaskTracker:
 
 
 @lru_cache()
-def get_embedder() -> BgeEmbedder:
+def get_embedder():
+    from src.infrastructure.embeddings.bge_embedder import BgeEmbedder
+
     settings = get_settings()
     return BgeEmbedder(model_name=settings.embed_model_name)
 
@@ -69,6 +69,18 @@ def get_redis_hot_cache() -> RedisHotCache:
 def get_postgres_repository() -> PostgresRepository:
     return PostgresRepository()
 
+
+@lru_cache()
+def get_workspace_service() -> WorkspaceService:
+    from src.infrastructure.database.postgres_repository import async_session_factory
+
+    return WorkspaceService(async_session_factory)
+
+
+@lru_cache()
+def get_outbox_dispatcher() -> OutboxDispatcher:
+    return OutboxDispatcher(async_session_factory, get_task_queue_adapter())
+
 @lru_cache()
 def get_minio_storage() -> MinioStorage:
     return MinioStorage()
@@ -78,11 +90,15 @@ def get_task_queue_adapter() -> ArqTaskQueueAdapter:
     return ArqTaskQueueAdapter()
 
 @lru_cache()
-def get_parse_adapter() -> DoclingParseAdapter:
+def get_parse_adapter():
+    from src.infrastructure.parsing.docling_adapter import DoclingParseAdapter
+
     return DoclingParseAdapter()
 
 @lru_cache()
-def get_document_indexer() -> DocumentIndexer:
+def get_document_indexer():
+    from src.infrastructure.indexing.document_indexer import DocumentIndexer
+
     return DocumentIndexer(
         settings=get_settings(),
         minio_storage=get_minio_storage(),

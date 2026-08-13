@@ -45,6 +45,7 @@ class GenerateAnswerUseCase:
         *,
         auto_expand_corpus: bool = True,
         top_k: int = 5,
+        project_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         start_total = time.perf_counter()
         
@@ -93,7 +94,9 @@ class GenerateAnswerUseCase:
             total_embed = 0.0
             total_retrieve = 0.0
             for s_query in search_queries:
-                c, m = await self._retrieve.execute(s_query, top_k=top_k, document_id=did)
+                c, m = await self._retrieve.execute(
+                    s_query, top_k=top_k, document_id=did, project_id=project_id
+                )
                 total_embed += m.get("embedding_ms", 0.0)
                 total_retrieve += m.get("retrieval_ms", 0.0)
                 for chunk in c:
@@ -108,6 +111,26 @@ class GenerateAnswerUseCase:
         if not chunks and document_id and auto_expand_corpus:
             chunks, metrics = await gather(None)
             scope = "expanded_corpus"
+
+        if not chunks:
+            total_ms = (time.perf_counter() - start_total) * 1000
+            return {
+                "answer": (
+                    "I do not have enough information based on the provided papers. "
+                    "Upload a PDF and wait until its status is completed before asking questions."
+                ),
+                "citations": [],
+                "retrieval_scope": scope,
+                "debug": {
+                    "retrieval_mode": "empty_corpus",
+                    "cache_hit": False,
+                    "embedding_ms": round(metrics["embedding_ms"], 2),
+                    "retrieval_ms": round(metrics["retrieval_ms"], 2),
+                    "llm_ms": 0.0,
+                    "total_ms": round(total_ms, 2),
+                    "top_k": 0,
+                },
+            }
 
         start_llm = time.perf_counter()
         result = self._answer_from_chunks(query, chunks, scope)
@@ -188,9 +211,16 @@ class GenerateAnswerUseCase:
         for idx, chunk in enumerate(chunks, start=1):
             citations.append({
                 "id": idx,
+                "doc_id": chunk.doc_id,
                 "document_name": chunk.metadata.get("filename", "Unknown"),
                 "page": chunk.metadata.get("page") or chunk.page_start,
+                "page_start": chunk.page_start,
+                "page_end": chunk.page_end,
                 "chunk_id": chunk.id,
+                "source_block_id": chunk.metadata.get("source_block_id", chunk.id),
+                "matched_chunk_id": chunk.metadata.get("matched_chunk_id", chunk.id),
+                "source_content_hash": chunk.metadata.get("source_content_hash"),
+                "section": chunk.metadata.get("section_path"),
                 "score": round(float(chunk.score or 0.0), 4),
                 "text": chunk.text[:700]
             })

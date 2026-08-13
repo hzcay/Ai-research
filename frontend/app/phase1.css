@@ -1,0 +1,36 @@
+.lifecycle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lifecycle select {
+  border: 1px solid #dfe3df;
+  background: #fff;
+  border-radius: 4px;
+  padding: 6px 28px 6px 8px;
+  font-size: 11px;
+}
+.memberActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.memberActions button {
+  border: 1px solid #dfe3df;
+  background: #fff;
+  color: #a93b35;
+  border-radius: 4px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+}
+.formHelp {
+  font-size: 12px;
+  color: #737b75;
+  background: #f2f6f3;
+  border-radius: 6px;
+  padding: 10px 12px;
+  line-height: 1.5;
+}
+.noticeBanner{margin:12px 25px 0;padding:10px 12px;background:#eaf5ee;color:#246348;display:flex;align-items:center;gap:8px;font-size:12px;border:1px solid #c7dfcf;border-radius:5px}.noticeBanner button{border:0;background:transparent;color:inherit;margin-left:auto}.secureBadge{display:flex;align-items:center;gap:5px;color:#52705f;background:#f0f6f2;border:1px solid #d8e7dc;padding:7px 9px;border-radius:5px;font-size:10px;font-weight:700}.crumbHome{color:#286b50;font-weight:700}.quietLabel{color:#778078;font-size:11px}.rowIcon{width:28px;height:28px;display:grid;place-items:center;color:#286b50;background:#e9f3ed;border-radius:6px}.emptyGlyph{width:54px;height:54px;display:grid;place-items:center;color:#277052;background:#e8f3ec;border-radius:14px}.emptyMeta{margin-top:18px;color:#89928b;font-size:11px}.emptyPanel.compact{padding:34px 20px;min-height:240px}.emptyPanel.compact h3{margin-bottom:2px}.emptyPanel.compact p{margin-top:8px}.memberRow{min-height:70px}

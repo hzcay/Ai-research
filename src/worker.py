@@ -10,6 +10,7 @@ from src.application.container import (
     get_process_document_use_case,
     get_postgres_repository,
     get_task_queue_adapter,
+    get_outbox_dispatcher,
 )
 
 load_dotenv()
@@ -75,10 +76,24 @@ async def reconcile_ingestion_jobs(ctx):
             job.error_message = str(exc)[:1000]
             await repository.update_ingestion_job(job)
 
+
+async def dispatch_outbox(ctx):
+    count = await get_outbox_dispatcher().dispatch_pending()
+    if count:
+        logger.info(f"Dispatched {count} outbox events")
+
+
+async def handle_domain_event(ctx, event_id: str):
+    """Phase 1 domain-event sink; later phases attach explicit consumers."""
+    logger.bind(outbox_event_id=event_id).info("Domain event delivered")
+
 class WorkerSettings:
-    functions = [process_document]
+    functions = [process_document, handle_domain_event]
     on_startup = startup
     redis_settings = RedisSettings.from_dsn(os.getenv("REDIS_URL", "redis://redis:6379/0"))
     max_tries = 3
     job_timeout = 3600
-    cron_jobs = [cron(reconcile_ingestion_jobs, minute=set(range(60)))]
+    cron_jobs = [
+        cron(reconcile_ingestion_jobs, minute=set(range(60))),
+        cron(dispatch_outbox, second={0, 15, 30, 45}),
+    ]

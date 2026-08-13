@@ -24,11 +24,18 @@ class IngestPdfsUseCase:
         self._task_queue = task_queue
 
     async def execute(
-        self, file_bytes: bytes, filename: str, *, force: bool = False
+        self,
+        file_bytes: bytes,
+        filename: str,
+        *,
+        force: bool = False,
+        project_id: str | None = None,
     ) -> dict:
         try:
             content_hash = hashlib.sha256(file_bytes).hexdigest()
-            existing = await self._repo.get_document_by_content_hash(content_hash)
+            existing = await self._repo.get_document_by_content_hash(
+                content_hash, project_id=project_id
+            )
             if existing and not force:
                 return {
                     "status": (
@@ -55,6 +62,7 @@ class IngestPdfsUseCase:
                 doc_record.minio_path = minio_path
                 doc_record.status = "queued"
                 doc_record.content_hash = content_hash
+                doc_record.project_id = project_id or doc_record.project_id
                 await self._repo.update_document(doc_record)
                 ingestion_job = await self._repo.get_ingestion_job_by_doc_id(doc_id)
                 if ingestion_job is None:
@@ -72,6 +80,7 @@ class IngestPdfsUseCase:
                     minio_path=minio_path,
                     status="queued",
                     content_hash=content_hash,
+                    project_id=project_id,
                 )
                 ingestion_job = IngestionJob(
                     id=str(uuid.uuid4()),

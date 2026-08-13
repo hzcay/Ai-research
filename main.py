@@ -5,7 +5,7 @@ from groq import Groq
 from qdrant_client import QdrantClient
 
 from src.api.dependencies import init_app_dependencies
-from src.api.routes import chat, ingest, search
+from src.api.routes import auth, chat, ingest, search, workspace
 from src.infrastructure.config.settings import get_settings
 
 @asynccontextmanager
@@ -57,6 +57,8 @@ async def readiness_check() -> dict:
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(search.router, prefix="/search", tags=["search"])
 app.include_router(ingest.router, prefix="/ingest", tags=["ingest"])
+app.include_router(workspace.router, prefix="/workspace", tags=["workspace"])
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
 
 if __name__ == "__main__":
     import uvicorn

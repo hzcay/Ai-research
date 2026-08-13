@@ -11,7 +11,9 @@ class DocumentRepositoryPort(Protocol):
     async def get_document(self, doc_id: str) -> Optional[Document]:
         ...
 
-    async def get_document_by_content_hash(self, content_hash: str) -> Optional[Document]:
+    async def get_document_by_content_hash(
+        self, content_hash: str, project_id: Optional[str] = None
+    ) -> Optional[Document]:
         ...
 
     async def create_document_with_job(

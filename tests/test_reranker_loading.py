@@ -9,19 +9,20 @@ def test_bge_reranker_lazy_loading():
         reranker = BgeReranker()
         assert reranker._model is None, "Model should not be loaded on init"
 
-        with patch.dict('sys.modules', {'FlagEmbedding': MagicMock()}):
+        mock_flag_module = MagicMock()
+        with patch.dict('sys.modules', {'FlagEmbedding': mock_flag_module}):
             mock_flag_reranker_class = MagicMock()
             mock_model_instance = MagicMock()
             mock_model_instance.compute_score.return_value = [0.9]
             mock_flag_reranker_class.return_value = mock_model_instance
+            mock_flag_module.FlagReranker = mock_flag_reranker_class
             
-            with patch('src.infrastructure.embeddings.bge_reranker.FlagReranker', mock_flag_reranker_class, create=True):
-                scores = reranker.rerank("query", ["text"])
+            scores = reranker.rerank("query", ["text"])
                 
-                assert reranker._model is not None
-                mock_flag_reranker_class.assert_called_once_with("BAAI/bge-reranker-base", use_fp16=True)
-                mock_model_instance.compute_score.assert_called_once()
-                assert scores == [0.9]
+            assert reranker._model is not None
+            mock_flag_reranker_class.assert_called_once_with("BAAI/bge-reranker-base", use_fp16=True)
+            mock_model_instance.compute_score.assert_called_once()
+            assert scores == [0.9]
 
 
 @pytest.mark.asyncio

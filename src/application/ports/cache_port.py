@@ -5,10 +5,15 @@ class SemanticCachePort(ABC):
     @abstractmethod
     async def get(
         self,
-        query: str,
         query_vector: list[float],
         tenant_id: str,
-        threshold: float = 0.92
+        query: str = "",
+        threshold: float = 0.92,
+        permission_scope: str = "default",
+        corpus_version: str = "default",
+        document_scope_hash: str = "all",
+        retrieval_mode: str = "hybrid",
+        query_type: str = "stable",
     ) -> Optional[Dict[str, Any]]:
         pass
 
@@ -20,7 +25,12 @@ class SemanticCachePort(ABC):
         answer: str,
         sources: list[dict],
         tenant_id: str,
-        metadata: dict
+        metadata: dict | None = None,
+        permission_scope: str = "default",
+        corpus_version: str = "default",
+        document_scope_hash: str = "all",
+        retrieval_mode: str = "hybrid",
+        query_type: str = "stable",
     ) -> None:
         pass
 

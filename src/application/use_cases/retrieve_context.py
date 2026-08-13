@@ -38,6 +38,7 @@ class RetrieveContextUseCase:
         query: str,
         top_k: int = 5,
         document_id: Optional[str] = None,
+        project_id: Optional[str] = None,
     ) -> tuple[List[RetrievedChunk], dict[str, float]]:
         t0 = time.perf_counter()
         
@@ -53,6 +54,7 @@ class RetrieveContextUseCase:
             query_vectors=query_vectors,
             top_k=actual_top_k,
             document_id=document_id,
+            project_id=project_id,
         )
         
         parent_ids = []
@@ -96,6 +98,7 @@ class RetrieveContextUseCase:
             source_metadata.update({
                 "is_parent": True,
                 "source_block_id": pid,
+                "matched_chunk_id": best_match.id if best_match else pid,
                 "page": source_metadata.get("page_start"),
             })
             

@@ -5,7 +5,17 @@
 ![MinIO](https://img.shields.io/badge/MinIO-Object_Storage-c7202c.svg)
 ![Qdrant](https://img.shields.io/badge/Qdrant-Vector_Database-ff5252.svg)
 ![Redis](https://img.shields.io/badge/Redis-Distributed_Cache-dc382d.svg)
-![Streamlit](https://img.shields.io/badge/Streamlit-UI-FF4B4B.svg)
+![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)
+
+## Phase status
+
+Phase 1 (Research Workspace Foundation) is complete. The primary UI is now a custom Next.js workspace with project membership/RBAC, versioned scope approval, review tasks, audit history, project lifecycle, workflow idempotency, transactional outbox delivery, and project-scoped document/vector access.
+
+Local development runs FastAPI, the ARQ worker, and Next.js on the host; Docker Compose runs only PostgreSQL, Redis, Qdrant, and MinIO. Start `./scripts/dev-local.sh infra`, then run `./scripts/dev-local.sh api`, `./scripts/dev-local.sh worker`, and `./scripts/dev-local.sh ui` in separate terminals.
+
+Phase 1 authentication intentionally uses the local header adapter (`X-User-Id`, `X-User-Email`, `X-User-Name`). An external identity provider is deferred by architecture decision.
+
+For a file-by-file implementation map and instructions for continuing with Phase 2, see [the agent handoff](docs/research-platform/11-agent-handoff.md).
 
 Production-oriented Retrieval-Augmented Generation (RAG) system for academic and technical research.
 Built with FastAPI, Arq, Qdrant, Redis, PostgreSQL, MinIO, and BGE-M3 hybrid retrieval to support scalable document ingestion, grounded question answering, and retrieval observability.
@@ -185,6 +195,39 @@ To further evolve this enterprise architecture, the following improvements are p
 - Python 3.11+
 - Docker & Docker Compose
 - Groq API Key
+
+### Recommended local development
+
+Run only PostgreSQL, Qdrant, Redis, and MinIO in Docker. Run application
+processes from the local virtual environment so code changes do not require an
+image rebuild:
+
+Local infrastructure uses a dedicated port range to avoid collisions with
+other projects: PostgreSQL `55432`, Redis `56379`, Qdrant `56333`, and MinIO
+`59000`.
+
+```bash
+./scripts/dev-local.sh infra
+./scripts/dev-local.sh migrate
+```
+
+Then use three terminals:
+
+```bash
+./scripts/dev-local.sh api
+./scripts/dev-local.sh worker
+./scripts/dev-local.sh ui
+```
+
+The UI command starts the Next.js Research Workspace at `http://localhost:3000`.
+The legacy Streamlit chatbot remains in `app.py` for reference but is no longer
+the primary product UI.
+
+The containerized application images remain available when needed with:
+
+```bash
+docker compose -f docker/docker-compose.yml --profile app up -d --build
+```
 
 ### 1. Configure Environment Variables
 ```bash

@@ -3,13 +3,13 @@ from __future__ import annotations
 import threading
 from typing import Any, Dict
 
-from FlagEmbedding import BGEM3FlagModel
-
 from src.application.ports.embedder_port import EmbedderPort
 
 class BgeEmbedder(EmbedderPort):
     def __init__(self, model_name: str) -> None:
         self._lock = threading.Lock()
+        from FlagEmbedding import BGEM3FlagModel
+
         with self._lock:
             self._model = BGEM3FlagModel(model_name, use_fp16=True)
 

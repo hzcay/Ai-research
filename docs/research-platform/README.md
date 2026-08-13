@@ -45,6 +45,7 @@ paper, evidence hoac draft dang mo.
 - [08-reliability-and-security.md](08-reliability-and-security.md): consistency, outbox, retry, authorization va privacy.
 - [09-evaluation-contract.md](09-evaluation-contract.md): dinh nghia KPI, dataset va evaluation gate.
 - [10-mvp-vertical-slice.md](10-mvp-vertical-slice.md): pham vi MVP co the trien khai va demo end-to-end.
+- [11-agent-handoff.md](11-agent-handoff.md): implementation map and continuation instructions for the next coding agent.
 
 ## Thu tu feature theo dependency
 

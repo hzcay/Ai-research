@@ -23,6 +23,7 @@ class PostgresRepository:
             created_at=doc.created_at,
             metadata_=doc.metadata_,
             content_hash=doc.content_hash,
+            project_id=doc.project_id,
         )
         
     def _to_domain_doc(self, db_doc: DBDocument) -> Document:
@@ -35,6 +36,7 @@ class PostgresRepository:
             created_at=db_doc.created_at,
             metadata_=db_doc.metadata_,
             content_hash=db_doc.content_hash,
+            project_id=db_doc.project_id,
         )
 
     def _to_db_job(self, job: IngestionJob) -> DBIngestionJob:
@@ -121,6 +123,7 @@ class PostgresRepository:
                 db_doc.status = document.status
                 db_doc.metadata_ = document.metadata_
                 db_doc.content_hash = document.content_hash
+                db_doc.project_id = document.project_id
                 await session.commit()
             return document
 
@@ -133,9 +136,13 @@ class PostgresRepository:
                 return self._to_domain_doc(db_doc)
             return None
 
-    async def get_document_by_content_hash(self, content_hash: str) -> Optional[Document]:
+    async def get_document_by_content_hash(
+        self, content_hash: str, project_id: Optional[str] = None
+    ) -> Optional[Document]:
         async with self.async_session() as session:
             stmt = select(DBDocument).where(DBDocument.content_hash == content_hash)
+            if project_id is not None:
+                stmt = stmt.where(DBDocument.project_id == project_id)
             result = await session.execute(stmt)
             db_doc = result.scalar_one_or_none()
             return self._to_domain_doc(db_doc) if db_doc else None

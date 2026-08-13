@@ -9,6 +9,14 @@ from src.domain.entities.document import Document
 from src.infrastructure.indexing.chunker import chunk_document_pages
 
 
+@pytest.fixture(autouse=True)
+def run_thread_boundaries_inline(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def inline(func, /, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr("src.application.use_cases.process_document.asyncio.to_thread", inline)
+
+
 def test_page_chunks_are_deterministic_and_keep_provenance() -> None:
     pages = [
         {"page_number": 1, "text": "# Introduction\n\nA stable source block."},
@@ -153,3 +161,5 @@ async def test_process_document_falls_back_when_page_text_is_empty() -> None:
 
     assert document.status == "completed"
     assert repository.create_chunks.await_count == 2
+    stored = repository.create_chunks.await_args_list[0].args[0]
+    assert all(len(chunk.source_content_hash or "") == 64 for chunk in stored)

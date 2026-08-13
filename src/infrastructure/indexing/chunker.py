@@ -111,6 +111,7 @@ def chunk_markdown_with_tables(
     child_chunks: List[Dict[str, Any]] = []
     
     for p_idx, p_text in enumerate(parent_texts):
+        source_hash = hashlib.sha256(p_text.strip().encode("utf-8")).hexdigest()
         parent_id = _stable_chunk_id(doc_id, "parent", str(p_idx), p_text)
         
         parent_chunks.append({
@@ -122,7 +123,8 @@ def chunk_markdown_with_tables(
             "token_estimate": _estimate_tokens(p_text),
             "page_start": None, # Could extract if we map from PyMuPDF
             "page_end": None,
-            "section": None # Could extract using Regex on headers
+            "section": None, # Could extract using Regex on headers
+            "source_content_hash": source_hash,
         })
         
         # 3. Split Parent into Child Chunks
@@ -138,7 +140,8 @@ def chunk_markdown_with_tables(
                 "token_estimate": _estimate_tokens(c_text),
                 "page_start": None,
                 "page_end": None,
-                "section": None
+                "section": None,
+                "source_content_hash": source_hash,
             })
             
     return parent_chunks, child_chunks

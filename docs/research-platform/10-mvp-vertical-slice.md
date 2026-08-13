@@ -17,7 +17,7 @@ tu search den mot thematic section co claim-level citation va reviewer approval.
 - Mot evidence schema co dinh, vi du:
   - research objective
   - population/dataset
-  - method
+  - method  
   - sample size
   - main finding
   - limitation

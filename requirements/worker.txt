@@ -1,0 +1,4 @@
+-r base.txt
+PyMuPDF>=1.24.14,<2.0.0
+docling>=2.0.0,<3.0.0
+

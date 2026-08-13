@@ -8,6 +8,14 @@ from src.application.use_cases.ingest_pdfs import IngestPdfsUseCase
 from src.domain.entities.document import Document
 
 
+@pytest.fixture(autouse=True)
+def run_thread_boundaries_inline(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def inline(func, /, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr("src.application.use_cases.ingest_pdfs.asyncio.to_thread", inline)
+
+
 @pytest.mark.asyncio
 async def test_duplicate_completed_document_is_reused() -> None:
     existing = Document(id="doc-1", filename="paper.pdf", status="completed")

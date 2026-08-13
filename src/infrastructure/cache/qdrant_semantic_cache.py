@@ -29,13 +29,26 @@ class QdrantSemanticCache(SemanticCachePort):
 
     async def get(
         self,
-        query: str,
         query_vector: list[float],
         tenant_id: str,
-        threshold: float = 0.92
+        query: str = "",
+        threshold: float = 0.92,
+        permission_scope: str = "default",
+        corpus_version: str = "default",
+        document_scope_hash: str = "all",
+        retrieval_mode: str = "hybrid",
+        query_type: str = "stable",
     ):
+        del query
+        if query_type != "stable":
+            return None
+
         must_filters = [
-            {"key": "tenant_id", "match": {"value": tenant_id}}
+            {"key": "tenant_id", "match": {"value": tenant_id}},
+            {"key": "permission_scope", "match": {"value": permission_scope}},
+            {"key": "corpus_version", "match": {"value": corpus_version}},
+            {"key": "document_scope_hash", "match": {"value": document_scope_hash}},
+            {"key": "retrieval_mode", "match": {"value": retrieval_mode}},
         ]
 
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -91,8 +104,16 @@ class QdrantSemanticCache(SemanticCachePort):
         answer: str,
         sources: list[dict],
         tenant_id: str,
-        metadata: dict
+        metadata: dict | None = None,
+        permission_scope: str = "default",
+        corpus_version: str = "default",
+        document_scope_hash: str = "all",
+        retrieval_mode: str = "hybrid",
+        query_type: str = "stable",
     ):
+        if query_type != "stable":
+            return
+
         self._ensure_collection(len(query_vector))
         cache_id = str(uuid4())
         point_id = str(uuid4())
@@ -104,6 +125,10 @@ class QdrantSemanticCache(SemanticCachePort):
             "answer": answer,
             "sources": sources,
             "tenant_id": tenant_id,
+            "permission_scope": permission_scope,
+            "corpus_version": corpus_version,
+            "document_scope_hash": document_scope_hash,
+            "retrieval_mode": retrieval_mode,
             "created_at": datetime.now(timezone.utc).isoformat(),
             **(metadata or {})
         }
@@ -120,6 +145,10 @@ class QdrantSemanticCache(SemanticCachePort):
                     "payload": {
                         "cache_id": cache_id,
                         "tenant_id": tenant_id,
+                        "permission_scope": permission_scope,
+                        "corpus_version": corpus_version,
+                        "document_scope_hash": document_scope_hash,
+                        "retrieval_mode": retrieval_mode,
                         "expires_at": expires_at.isoformat()
                     }
                 }

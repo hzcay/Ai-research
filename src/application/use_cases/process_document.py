@@ -88,6 +88,7 @@ class ProcessDocumentUseCase:
             for chunk in [*parent_chunks, *child_chunks]:
                 chunk.update({
                     "doc_id": doc.id,
+                    "project_id": doc.project_id,
                     "filename": filename,
                     "content_hash": content_hash,
                     "metadata": metadata,
